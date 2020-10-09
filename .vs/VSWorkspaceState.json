@@ -1,8 +1,9 @@
 {
   "ExpandedNodes": [
     "",
-    "\\docs"
+    "\\docs",
+    "\\Werewolf"
   ],
-  "SelectedNode": "\\Werewolf.sln",
+  "SelectedNode": "\\Werewolf\\Werewolf.py",
   "PreviewInSolutionExplorer": false
 }
