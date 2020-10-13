@@ -5,6 +5,7 @@ The final project of Computer Network in 2020A, written in Python.
 ## Weekly Report Summary
 
 * 2020/10/12
+  * **IMPORTANT** Prerequisite: Implement a application layer protocol.
   * Function Demand: Implement the werewolf game rule (at most 16 players)
   * Tasks
     * Collect the game rule and demo applications;
