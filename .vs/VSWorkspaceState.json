@@ -2,8 +2,10 @@
   "ExpandedNodes": [
     "",
     "\\docs",
-    "\\Werewolf"
+    "\\Werewolf",
+    "\\Werewolf\\WP",
+    "\\Werewolf\\WP\\test"
   ],
-  "SelectedNode": "\\Werewolf\\Werewolf.py",
+  "SelectedNode": "\\Werewolf\\WP\\README.md",
   "PreviewInSolutionExplorer": false
 }
