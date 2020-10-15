@@ -8,9 +8,12 @@ __pycache__/
 
 # Visual Studio
 .vs/
+.suo
+*.sqlite
 
 # Pytest output
 *.html
+*.xml
 TestResults/
 TestStore/
 
