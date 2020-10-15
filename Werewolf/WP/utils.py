@@ -52,7 +52,7 @@ _checkParam = {
     },
     3: {
         'identityLimit': tuple,         # 能收到消息的玩家身份列表
-        'playerNumber': int,            # 目的玩家编号（deprecated）
+        # 'playerNumber': int,            # 目的玩家编号（deprecated）
         'format': tuple,                # 玩家应当输入的格式
         'prompt': str,                  # 输入提示
         'timeLimit': int                # 时间限制
@@ -62,23 +62,20 @@ _checkParam = {
         'target': int                   # 玩家执行操作的目标
     },
     4: {
-        'description': list,            # 要公布的消息
-        'victim': list,                 # 对象
+        'description': str,             # 要公布的消息
+        'parameter': tuple,             # 对象
     },
     -4: {'ACK': bool},                  #  确认，永远为true
     5: {
         'content': str,                 # 自由交谈的内容
-        'type': list                    # 能收到消息的身份列表，空列表指全部玩家
+        'type': tuple                   # 能收到消息的身份列表，空列表指全部玩家
     },
-    6: {
-        'content': str,                 # 单独发言的内容
-        'timeLimit': int                # 时间限制
-    },
-    -6: {'ACK': bool},                  # 确认，永远为true
-    7: {
+    6: {'timeLimit': int},              # 时间限制
+    -6: {'content': str},               # 发送的消息
+    7: {'ACK': bool},                   # 当服务器第一次发送时，指是否可以投票，当第二次发送时，指投票是否有效
+    -7: {
         'vote': bool,                   # 是否投票
         'candidate': int                # 投票候选人
     },
-    -7: {'ACK': bool},                  # 投票是否有效
     8: {}
 }

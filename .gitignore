@@ -8,6 +8,8 @@ __pycache__/
 
 # Pytest output
 *.html
+TestResults/
+TestStore/
 
 # Distribution / packaging
 .Python
