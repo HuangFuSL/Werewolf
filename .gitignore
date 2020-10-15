@@ -10,6 +10,7 @@ __pycache__/
 .vs/
 .suo
 *.sqlite
+*.pyperf
 
 # Pytest output
 *.html
