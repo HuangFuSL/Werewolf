@@ -22,4 +22,4 @@ Demo implementation:
 * [https://github.com/GeminiLab/OOPLRS](https://github.com/GeminiLab/OOPLRS) (C++ & Qt)
 * [https://github.com/Terund/Werewolf](https://github.com/Terund/Werewolf) (Python, not fully implemented)
 
-Protocol implementation: Please refer to its [introduction](Werewolf/WP/readme.md) page
+Protocol implementation: Please refer to its [introduction](Werewolf/WP/README.md) page
