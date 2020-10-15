@@ -13,7 +13,9 @@ The final project of Computer Network in 2020A, written in Python.
 
 ### 2020/10/12
 
-Function Demand: **TODO**
+Function Demand: Gamerule
+
+* TODO: List the gamerule here.
 
 Demo implementation:
 
