@@ -6,6 +6,17 @@ __pycache__/
 # C extensions
 *.so
 
+# Visual Studio
+.vs/
+.suo
+*.sqlite
+
+# Pytest output
+*.html
+*.xml
+TestResults/
+TestStore/
+
 # Distribution / packaging
 .Python
 build/
