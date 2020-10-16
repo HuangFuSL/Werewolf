@@ -12,6 +12,9 @@ __pycache__/
 *.sqlite
 *.pyperf
 
+# mkdocs
+site/
+
 # Pytest output
 *.html
 *.xml
