@@ -68,9 +68,12 @@ def test_transferPortError():
         'destAddr': '127.0.0.1',
         'destPort': port - 1
     }
-    tReceive = ReceiveThread(receiveSocket)
+    tReceive = ReceiveThread(receiveSocket, timeout=1)
     tReceive.start()
     data = ChunckedData(1, **raw)
     sendSocket.connect(('localhost', port))
     with raises(AssertionError):
         data.send(sendSocket)
+    tReceive.join()
+    with raises(ReceiveTimeoutError):
+        ret = tReceive.getResult()
