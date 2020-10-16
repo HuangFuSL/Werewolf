@@ -1,1 +1,44 @@
-site_name: My Docs
+site_name: Werewolf Documentation
+nav:
+  - Home: index.md
+  - Gamerule: gamerule.md
+theme:
+  name: material
+  language: zh
+  palette:  # 颜色
+    primary: 'blue'
+    accent: 'cyan'
+    feature:
+      tabs: true  # 横向导航
+  font:
+    code: Source Code Pro
+    text: PingFang SC
+markdown_extensions:
+  - pymdownx.arithmatex
+  - pymdownx.details
+  - admonition
+  - codehilite:
+      guess_lang: false
+      linenums: false
+  - toc:
+      permalink: true
+  - footnotes
+  - meta
+  - def_list
+  - pymdownx.arithmatex
+  - pymdownx.betterem:
+      smart_enable: all
+  - pymdownx.caret
+  - pymdownx.critic
+  - pymdownx.details
+  - pymdownx.emoji:
+      emoji_generator: !!python/name:pymdownx.emoji.to_png
+  - pymdownx.extra
+  - pymdownx.inlinehilite
+  - pymdownx.magiclink
+  - pymdownx.mark
+  - pymdownx.smartsymbols
+  - pymdownx.superfences
+  - pymdownx.tasklist:
+      custom_checkbox: true
+  - pymdownx.tilde
