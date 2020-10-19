@@ -1,6 +1,7 @@
-site_name: My Docs
+site_name: Werewolf Documentation
 nav:
   - Home: index.md
+  - Gamerule: gamerule.md
 theme:
   name: material
   language: zh
