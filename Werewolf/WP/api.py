@@ -1,9 +1,7 @@
 import gzip
 import json
-import signal
 import socket
 import threading
-import time
 from io import BytesIO
 from .utils import _checkParam
 
@@ -110,9 +108,6 @@ def _recv(connection: socket.socket) -> ChunckedData:
     assert (ret.content['destAddr'], ret.content['destPort']) == c.getsockname()
     c.close()
     return ret
-
-def _interrupt(signum, frame):
-    raise ReceiveTimeoutError() 
 
 class ReceiveThread(threading.Thread):
 

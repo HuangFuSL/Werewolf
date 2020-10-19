@@ -1,17 +1,12 @@
-# Welcome to MkDocs
+# Werewolf
 
-For full documentation visit [mkdocs.org](https://www.mkdocs.org).
+For full documentation visit our repository on [GitHub](https://github.com/HuangFuSL/Werewolf).
 
-## Commands
+The game requires at lease 6 players, and is able to accommodate up to 12 players. If you are not clear about the game rule, please refer to the [game manual](gamerule.md) (in Chinese) page.
 
-* `mkdocs new [dir-name]` - Create a new project.
+## Building the Documentation
+
+This project uses mkdocs to organize the documentation page.
+
 * `mkdocs serve` - Start the live-reloading docs server.
 * `mkdocs build` - Build the documentation site.
-* `mkdocs -h` - Print help message and exit.
-
-## Project layout
-
-    mkdocs.yml    # The configuration file.
-    docs/
-        index.md  # The documentation homepage.
-        ...       # Other markdown pages, images and other files.
