@@ -67,6 +67,8 @@ All players in the game are summarized in a abstract class `Person` which provid
 
 It should be noticed that the all the method mentioned above are **based on the protocol** and sends a packet to the client when the method is called. These methods return the action status of the play. For werewolves, for example, `kill()` method should return a number indicating the person to be killed and `destruct()` method should return a boolean value indicating whether the werewolf want to reveal its identity.
 
+*This layer is implemented on 2020/10/24*
+
 **Function Demand: Server interface**
 
 The server should control the game progress, and inform each player's action.
