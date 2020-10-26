@@ -32,7 +32,7 @@ The final project of Computer Network in 2020A, written in Python.
     * GUI
 * 2020/10/25
   * Recent progress report
-  * Player's identity layer (Finished, **code review in progress**)
+  * Player's identity layer (Finished in [abstraction.py](Werewolf/abstraction.py), **code review in progress**)
   * Starting the implementation of the server side after the code review
   * Starting the implementation of the client side after the code review
 
