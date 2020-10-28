@@ -1,210 +1,291 @@
 import socket
 import abc
+from time import sleep
+from threading import Thread
 
-from Werewolf.Werewolf.Werewolf.WP.api import ChunckedData
+from WP.api import ChunckedData, ReceiveThread, ReceiveTimeoutError
+
+_default_timeout = 30.0
+
+def default_timeout(timeout = None):
+    if timeout is not None and timeout > 0:
+        _default_timeout = timeout
+    return _default_timeout
+
+class TimeLock(Thread):
+
+    def __init__(self, timeout: float = _default_timeout):
+        self.end = False
+        self.timeout = timeout
+
+    def run(self):
+        sleep(self.timeout)
+        self.end = True
+
+    def getStatus(self):
+        return self.end
 
 
-class Person:
-    def __init__(self):
+class Person():
+
+    def __init__(self, id: int, client: tuple, server: tuple):
         # AF_INET：使用TCP/IP-IPv4协议簇；SOCK_STREAM：使用TCP流
-        self.client = socket.socket(socket.AF_INET, socket.SOCK_STREAM, 0)
-        # id和police的值由服务器进行分配，在__init__()方法中分别被初始化为0和False
-        self.id = 0
-        self.police = False
-        # 如果某个客户端是狼人，则innocent的值为False；否则为True
-        self.innocent = True
+        self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM, 0)
+        self.recv = socket.socket(socket.AF_INET, socket.SOCK_STREAM, 0)
+        self.client = client
+        self.server = server
+        self.id = id
+        self.police = False # police的值由服务器进行分配，在__init__()方法中被初始化为False
+        self.innocent = True # 如果某个客户端是狼人，则innocent的值为False；否则为True
+        self.alive = True
+        self.recv.bind(server)
+        self.recv.listen(1)
 
-    # 客户端判断自己接收到的分组类型是否为-2的代码先于verifyIdentity()实现，因此没有写到这个方法里
-    def verifyIdentity(self, receivedPacket):
-        if receivedPacket.content['success'] == True:
-            self.id = receivedPacket.content['chosenSeat']
-            # 1代表狼人，2代表狼王，3代表白狼王
-            if receivedPacket.content['identity'] in [1, 2, 3]:
-                self.innocent = False
+    def _getBasePacket(self) -> dict:
+        """
+        获取地址与端口信息
+        """
+        ret = {}
+        ret['srcAddr'] = self.server[0]
+        ret['srcPort'] = self.server[1]
+        ret['destAddr'] = self.client[0]
+        ret['destPort'] = self.client[1]
+        return ret
+
+    def startListening(self, timeout=0):
+        recevingThread = ReceiveThread(self.recv, timeout)
+        recevingThread.start()
+        recevingThread.join()
+        try:
+            return recevingThread.getResult()
+        except ReceiveTimeoutError as e:
+            return None
+
+    def vote(self, timeout: float = _default_timeout):
+        packet = self._getBasePacket()
+        pakcet['prompt'] = "Please vote for the people to be banished:"
+        packetSend = ChunckedData(7, packet)
+        sendingThread = Thread(target=packetSend.send(), args=(self.socket, ))
+        sendingThread.start()
+        return startListening(timeout=timeout)
+
+    def joinElection(self, timeout: float = _default_timeout):
+        packet = self._getBasePacket()
+        packet['format'] = bool
+        packet['prompt'] = 'Do you want to be the policeman?\nYou have %f seconds to decide.' % (timeout, )
+        packet['timeout'] = timeout
+        packetSend = ChunckedData(3, packet)
+        sendingThread = Thread(target=packetSend.send(), args=(self.socket,))
+        sendingThread.start()
+        return startListening(timeout=timeout)
+
+
+    def voteForPolice(self, timeout: float = _default_timeout):
+        if not self.police:
+            packet = self._getBasePacket()
+            packet['prompt'] = "Please vote for the police:"
+            packetSend = ChunckedData(7, packet)
+            sendingThread = Thread(target=packetSend.send(), args=(self.socket, ))
+            sendingThread.start()
+            return startListening(timeout=timeout)
         else:
-            print("Failed in verifying your identity.")
+            return None
 
-    def vote(self):
-        content = {}
-        id = int(input("Please enter the seat number of the player you want to vote for: "))
-        content['vote'] = True
-        content['candidate'] = id
-        votePacket = ChunckedData(-7, content)
-        votePacket.send(self.client)
-        return id
+    def setPolice(self, val: bool = True):
+        self.police = val
 
-    def joinElection(self):
-        content = {}
-        resp = input("Do you want to be the policeman? (y / n) ")
-        if resp == 'y':
-            content['action'] = True
-        elif resp == 'n':
-            content['action'] = False
-        content['target'] = -1
-        joinElectionPacket = ChunckedData(-3, content)
-        joinElectionPacket.send(self.client)
-        return content['action']
+    def speak(self, timeout: float = _default_timeout):
+        packet = self._getBasePacket()
+        packet['timeLimit'] = timeout
+        packetSend = ChunckedData(6, packet)
+        sendingThread = Thread(target=packetSend.send(), args=(self.socket, ))
+        sendingThread.start()
+        return startListening(timeout=timeout)
 
-    def voteForPolice(self):
-        content = {}
-        id = int(input("Please enter the seat number of the player you want to be the police: "))
-        content['vote'] = True
-        content['candidate'] = id
-        voteForPolicePacket = ChunckedData(-7, content)
-        voteForPolicePacket.send(self.client)
-        return id
+    def sendMessage(self, data: list = []):
+        packet = self._getBasePacket()
+        packet['description'] = '\n'.join(data)
+        packet['parameter'] = tuple()
+        sendingThread = Thread(target=packetSend.send(), args=(self.socket, ))
+        sendingThread.start()
 
-    """
-    如果某个客户端被指定为警长，这个方法用来将该客户端Person实例的police设置为True
-    客户端判断自己接收到的分组类型是否为4的代码先于verifyIdentity()实现，因此没有写到这个方法里
-    键"parameter"对应的元组中保存了被指定为警长的玩家的id
-    """
-    def setPolice(self, receivedPacket):
-        if receivedPacket.content['parameter'][0] == self.id:
-            self.police = True
-            print("You are chosen to be the police.")
+    def onDead(self, withFinalWords: bool, timeouts: tuple):
+        """
+        玩家出局，需要讨论警徽归属与遗言
+        """
+        self.alive = False
+        ret = []
+        if self.police:
+            packet = self._getBasePacket()
+            packet['prompt'] = "Please select the player you want to inherit the police:"
+            packetSend = ChunckedData(7, packet)
+            sendingThread = Thread(target=packetSend.send(), args=(self.socket, ))
+            sendingThread.start()
+            ret.append(self.startListening(timeout=timeouts[0]))
         else:
-            print("You are not chosen to be the police.")
-
-    # 此方法用于发言阶段，不用于自由交谈阶段
-    def speak(self):
-        print("Input your thoughts. Enter an empty line to finish.")
-        content = {}
-        raw_text = []
-        text = ""
-        for line in iter(input, ''):
-            raw_text.append(line)
-        for string in raw_text:
-            text += string
-        content['content'] = text
-        speakPacket = ChunckedData(-6, content)
-        speakPacket.send(self.client)
+            ret.append(None)
+        if withFinalWords:
+            packet = self._getBasePacket()
+            packet['timeLimit'] = timeouts[1]
+            packetSend = ChunckedData(6, packet)
+            sendingThread = Thread(target=packetSend.send(), args=(self.socket, ))
+            sendingThread.start()
+            ret.append(self.startListening(timeout=timeouts[1]))
+        else:
+            ret.append(None)
+        return ret
 
 
 class Villager(Person):
-    def __init__(self):
-        super().__init__()
+    """
+    村民类型，没有任何技能
+    """
+    def __init__(self, id: int, client: tuple, server: tuple):
+        super().__init__(id, client, server)
 
 
 class Wolf(Person):
-    def __init__(self):
-        super().__init__()
+    """
+    狼人，在夜间醒来，可以选择杀一个人
+    """
+    def __init__(self, id: int, client: tuple, server: tuple):
+        super().__init__(id, client, server)
+        self.innocent = False
+        self.peerList = []
 
-    def kill(self):
-        content = {}
-        content['action'] = True
-        id = int(print("Who do you want to kill? Enter his/her id: "))
-        content['target'] = id
-        killPacket = ChunckedData(-3, content)
-        killPacket.send(self.client)
-        return id
+    def setPeer(peer: Wolf):
+        self.peerList.append(peer)
 
-    # 本来想把这个方法命名为suicide的，后来感觉影响不好
-    def selfDestruct(self):
-        content = {}
-        message = "I am a wolf!"
-        content['content'] = message
-        speakPacket = ChunckedData(-6, content)
-        speakPacket.send(self.client)
+    def removePeer(peer: Wolf):
+        self.peerList.remove(peer)
 
-
-class KingOfWerewolves(Wolf):
-    def __init__(self):
-        super().__init__()
-
-
-class WhiteWerewolf(Wolf):
-    def __init__(self):
-        super().__init__()
-
+    def kill(self, alivePlayers: list, timeout: float = _default_timeout):
+        """
+        狼人之间进行讨论及确定投票目标
+        """
+        packet = self._getBasePacket()
+        packet['format'] = int
+        packet['prompt'] = "Please select a person to kill.\nYou have %f seconds to decide with your partner" % (timeout, )
+        packet['timeout'] = timeout
+        packetSend = ChunckedData(3, packet)
+        sendingThread = Thread(target=packetSend.send(), args=(self.socket, ))
+        sendingThread.start()
+        timer = TimeLock(timeout)
+        timer.setDaemon(True)
+        timer.start()
+        while not timer.getStatus():
+            dataRecv = self.startListening(timeout)
+            if dataRecv is None or dataRecv['type'] == -3:
+                return dataRecv
+            elif dataRecv['type'] == 5:
+                dataRecv.pop('type')
+                packetSend = ChunckedData(5, dataRecv)
+                sendingThreads = [Thread(target=packetSend.send(), args=(_, )) for _ in self.peerList.socket]
+                for thread in sendingThreads:
+                    thread.start()
+        return None
 
 class SkilledPerson(Person):
-    def __init__(self):
-        super().__init__()
 
-    @abc.abstractmethod
-    def skill(self):
-        pass
+    def __init__(self, id: int, client: tuple, server: tuple):
+        super(SkilledPerson, self).__init__(id, client, server)
+        self.used = False
+
+    def postSkill(self):
+        self.used = True
+
+    def skill(self, prompt: str = "", timeout: float = _default_timeout, format: type = int):
+        self.used = True
+        packet = self._getBasePacket()
+        packet['format'] = format
+        packet['prompt'] = prompt
+        packet['timeout'] = timeout
+        packetSend = ChunckedData(3, packet)
+        sendingThread = Thread(target=packetSend.send(), args=(self.socket, ))
+        sendingThread.start()
+        return self.startListening(timeout)
+
+class KingOfWerewolves(Wolf, SkilledPerson):
+
+    def __init__(self, id: int, client: tuple, server: tuple):
+        super(KingOfWerewolves, self).__init__(id, client, server)
+
+    def skill(self, timeout: float = _default_timeout):
+        self.used = True
+        prompt = """Please select a person to kill.
+You have %f seconds to decide.""" % (timeout, )
+        return SkilledPerson.skill(self, prompt, timeout)
+
+
+class WhiteWerewolf(Wolf, SkilledPerson):
+
+    def __init__(self, id: int, client: tuple, server: tuple):
+        super(WhiteWerewolf, self).__init__(id, client, server)
+
+    def skill(self, timeout: float = _default_timeout):
+        prompt = """Please select a person to kill.
+You have %f seconds to decide.""" % (timeout, )
+        return SkilledPerson.skill(self, prompt, timeout)
 
 
 class Predictor(SkilledPerson):
-    def __init__(self):
-        super().__init__()
+    
+    def __init__(self, id: int, client: tuple, server: tuple):
+        super(Predictor, self).__init__(id, client, server)
 
-    def skill(self):
-        content = {}
-        id = int(input("Whose identity do you want to know? Enter his/her id: "))
-        content['action'] = True
-        content['target'] = id
-        predictPacket = ChunckedData(-3, content)
-        predictPacket.send(self.client)
-        return id
+    def skill(self, timeout: float = _default_timeout):
+        prompt = """Please select a person to inspect his identity.
+You have %f seconds to decide.""" % (timeout, )
+        return SkilledPerson.skill(self, prompt, timeout)
 
 
 class Witch(SkilledPerson):
-    def __init__(self):
-        super().__init__()
+    
+    def __init__(self, id: int, client: tuple, server: tuple):
+        super(Witch, self).__init__(id, client, server)
 
-    """
-    因为女巫不但需要决定是否发动技能，还需要决定技能是救人还是杀人，以及确定技能发动的对象。而-3分组只有两个变量。
-    为了解决这个问题，做出如下规定：如果'target'键对应的值为-1，则表示女巫不发动技能。如果'target'键对应的值
-    为某个用户的座位编号，那么'active'键对应的值为True时，表示女巫救人；值为False时表示女巫杀人
-    """
-    def skill(self):
-        content = {}
-        prompt = "Do you want to save someone who's been dead, or do you want to kill "
-        prompt += "someone with your poison? (s / k) "
-        option_1 = input("Do you want to use your skill? (y / n)")
-        if option_1 == 'n':
-            content['target'] = -1
-        elif option_1 == "y":
-            option_2 = input(prompt)
-            if option_2 == "s":
-                content['active'] = True
-            elif option_2 == 'k':
-                content['active'] = False
-            id = int(input("Please enter the id of the player whom you want to use skill onto: "))
-            content['target'] = id
-        predictPacket = ChunckedData(-3, content)
-        predictPacket.send(self.client)
-        return id
+    def skill(self, killed: int = 0, timeout: float = _default_timeout):
+        packet = self._getBasePacket()
+        packet['content'] = "The player %s is killed at night." % (str(killed) if killed else "unknown", )
+        packetSend = ChunckedData(5, packet)
+        prompt = """Please select a person to use the poison. If you want to save the victim, enter "save".
+You have %f seconds to decide.""" % (timeout, )
+        return SkilledPerson.skill(self, prompt, timeout, (int, str))
 
 
 class Hunter(SkilledPerson):
-    def __init__(self):
-        super().__init__()
 
-    def skill(self):
-        content = {}
-        id = int(input("Who do you want to shoot at? Enter his/her id: "))
-        content['action'] = True
-        content['target'] = id
-        predictPacket = ChunckedData(-3, content)
-        predictPacket.send(self.client)
-        return id
+    def __init__(self, id: int, client: tuple, server: tuple):
+        super(Hunter, self).__init__(id, client, server)
+
+    def skill(self, timeout: float = _default_timeout):
+        prompt = """Please select a person to kill.
+You have %f seconds to decide.""" % (timeout, )
+        return SkilledPerson.skill(self, prompt, timeout)
 
 
 class Guard(SkilledPerson):
-    def __init__(self):
-        super().__init__()
+    
+    def __init__(self, id: int, client: tuple, server: tuple):
+        super(Guard, self).__init__(id, client, server)
 
-    def skill(self):
-        content = {}
-        id = int(input("Who do you want to guard tonight? Enter his/her id: "))
-        content['action'] = True
-        content['target'] = id
-        predictPacket = ChunckedData(-3, content)
-        predictPacket.send(self.client)
-        return id
+    def skill(self, timeout: float = _default_timeout):
+        prompt = """Please select a person to guard.
+You have %f seconds to decide.""" % (timeout, )
+        return SkilledPerson.skill(self, prompt, timeout)
 
 
 class Idiot(SkilledPerson):
-    def __init__(self):
-        super().__init__()
+    
+    def __init__(self, id: int, client: tuple, server: tuple):
+        super(Idiot, self).__init__(id, client, server)
 
     def skill(self):
-        content = {}
-        message = "I am an idiot!"
-        content['content'] = message
-        speakPacket = ChunckedData(-6, content)
-        speakPacket.send(self.client)
+        self.postSkill()
+
+    def onDead(self, killedAtNight, withFinalWords, timeouts):
+        if killedAtNight or self.used: 
+            return super().onDead(withFinalWords, timeouts)
+        else:
+            self.skill()
+            return None

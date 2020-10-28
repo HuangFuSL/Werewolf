@@ -93,18 +93,15 @@ class ChunckedData(object):
         c['type'] = self.type
         return self._compress(json.dumps(c))
 
-    def send(self, connection: socket.socket):
-        try:
-            assert (self.content['destAddr'], self.content['destPort']) == connection.getpeername()
-        except OSError as e:
-            raise NotConnectedError()
+    def send(self, connection: socket.socket, dest: tuple):
+        connection.connect(dest)
+        assert (self.content['destAddr'], self.content['destPort']) == connection.getpeername()
         connection.send(self.toBytesArray())
 
 def _recv(connection: socket.socket) -> ChunckedData:
     connection.listen(5)
     c, addr = connection.accept()
     ret = ChunckedData(0, rawData=c.recv(16384))
-    assert ret.content['srcAddr'] == c.getpeername()[0]
     assert (ret.content['destAddr'], ret.content['destPort']) == c.getsockname()
     c.close()
     return ret
