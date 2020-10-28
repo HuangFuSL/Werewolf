@@ -86,13 +86,17 @@ PyQt5 is used to design and implement the GUI. A prototype will be needed.
 
 **Code Review Result of [abstraction.py](Werewolf/abstraction.py)**
 
+The original file is modified to meet the function demand. Refer to the annotation in the file to get more information about the structure of the classes. UML graph is shown below:
+
+![UML](img//UML.svg)
+
 **Implementation of server side**
 
-Currently pending for code review.
+TODO: Report the progress here.
 
 **Implementation of client side**
 
-Currently pending for code review.
+TODO: Report the progress here.
 
 <!-- 所有的人抽象成基类，所需的属性与方法如下：
 
