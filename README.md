@@ -22,14 +22,19 @@ The final project of Computer Network in 2020A, written in Python.
   * Tasks
     * Collect the game rule and demo applications;
     * Collect demo implementations.
- * 2020/10/16
-  * Recent progress report 
+* 2020/10/16
+  * Recent progress report
   * Implementation framework
     * Protocol
     * Player's identity
     * Server interface & CLI server
     * Client interface
     * GUI
+* 2020/10/25
+  * Recent progress report
+  * Player's identity layer (Finished in [abstraction.py](Werewolf/abstraction.py), **code review in progress**)
+  * Starting the implementation of the server side after the code review
+  * Starting the implementation of the client side after the code review
 
 ### From 2020/10/12
 
@@ -67,7 +72,7 @@ All players in the game are summarized in a abstract class `Person` which provid
 
 It should be noticed that the all the method mentioned above are **based on the protocol** and sends a packet to the client when the method is called. These methods return the action status of the play. For werewolves, for example, `kill()` method should return a number indicating the person to be killed and `destruct()` method should return a boolean value indicating whether the werewolf want to reveal its identity.
 
-*This layer is implemented on 2020/10/24*
+This layer is implemented on 2020/10/24, in [abstraction.py](Werewolf/abstraction.py)
 
 **Function Demand: Server interface**
 
@@ -76,6 +81,18 @@ The server should control the game progress, and inform each player's action.
 **Task: GUI design**
 
 PyQt5 is used to design and implement the GUI. A prototype will be needed.
+
+### From 2020/10/25
+
+**Code Review Result of [abstraction.py](Werewolf/abstraction.py)**
+
+**Implementation of server side**
+
+Currently pending for code review.
+
+**Implementation of client side**
+
+Currently pending for code review.
 
 <!-- 所有的人抽象成基类，所需的属性与方法如下：
 
