@@ -72,6 +72,13 @@ class ChunckedData(object):
             except KeyError as a:
                 raise PacketTypeMismatchException(self.type, *a.args)
 
+    def getAddr(self, dest: str) -> tuple:
+        assert dest in ('source', 'destination')
+        if (dest == 'source'):
+            return self.content['srcAddr'], self.content['srcPort']
+        else:
+            return self.content['destAddr'], self.content['destPort']
+
     def setValue(self, name, value):
         self.content[name] = value       
 
