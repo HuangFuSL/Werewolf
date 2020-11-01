@@ -92,11 +92,27 @@ The original file is modified to meet the function demand. Refer to the annotati
 
 **Implementation of server side**
 
-TODO: Report the progress here.
+**Implementation of client side**
+
+### From 2020/10/31
+
+**Implementation of server side**
+
+The server plays a role as the God in the werewolf game, most game rules are carried out by the server and it follows the implementation logic like the following:
+
+* Threads: we use the parent thread to carry out most game rules, and the child threads responsible for the clients where one child thread corresponds to one client(player). The child threads can communicate with the parent thread.
+* Parent thread: it carry out most functions of the God in the werewolf game. It control the procedure of the game. In the night, it exchange information with the corresponding wolf or god person. In the day, it shows the discussion on the board and calculates the voting result. The server exchange information with each client through each corresponding child thread.
+* Child thread: it carry out the function to exchange information with the client directly. It listen and get the information from the client and decide whether to deliver it to the parent thread or not.
+
+![Server](img//Server.svg)
 
 **Implementation of client side**
 
-TODO: Report the progress here.
+* Threads: we use the parent thread responsible for listening, and the child threads responsible for input.
+* Parent thread: it carry out the function of listening. It listen to the corresponding parent thread of the server. When the client want to input, it will create a new child thread.
+* Child thread: it carry out the function of user input. 
+
+![Client](img//Client.svg)
 
 <!-- 所有的人抽象成基类，所需的属性与方法如下：
 
