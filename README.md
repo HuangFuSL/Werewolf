@@ -7,10 +7,10 @@ The final project of Computer Network in 2020A, written in Python.
 **Progress To-do List:**
 
 * [x] Protocol implementation
-* [ ] Player identity abstraction
+* [x] Player identity abstraction
 * [ ] Server side interface implementation
 * [ ] Client side interface implementation
-* [ ] Graphics user interface implementation
+* [ ] Graphics user interface implementation (**depreciated**)
 
 **Meeting Summary:**
 
@@ -35,6 +35,10 @@ The final project of Computer Network in 2020A, written in Python.
   * Player's identity layer (Finished in [abstraction.py](Werewolf/abstraction.py), **code review in progress**)
   * Starting the implementation of the server side after the code review
   * Starting the implementation of the client side after the code review
+* 2020/10/31
+  * Recent progress report
+  * Discussed the framework of the server and server side
+  * Detailed implementation of client and server side should be progressed
 
 ### From 2020/10/12
 
