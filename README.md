@@ -17,7 +17,7 @@ The final project of Computer Network in 2020A, written in Python.
 * 2020/10/12
   * **IMPORTANT** Prerequisite: Implement a application layer protocol.  
     * Possible reference `urllib` or `requests`
-    * The program sends and receives chuncked data rather than the plain text (raw data).
+    * The program sends and receives chunked data rather than the plain text (raw data).
   * Function Demand: Implement the werewolf game rule (at most 12 players)
   * Tasks
     * Collect the game rule and demo applications;
