@@ -44,9 +44,11 @@ class Game():
 
 class IncomingConnection(Thread):
 
-    def __init__(self, addr: tuple, dest: Game):
+    def __init__(self, addr: tuple, dest: Game,id: int):
         super(EstablishConnThread, self).__init__()
         self.result = None
         self.address = addr
+        self.id = id
 
     def run(self):
+        
