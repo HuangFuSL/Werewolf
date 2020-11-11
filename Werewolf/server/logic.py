@@ -132,6 +132,18 @@ class Game:
         else:
             return -1
 
+    def dayTime(self):
+        """
+        TODO: game logic in daytime
+        """
+        pass
+
+    def nightTime(self):
+        """
+        TODO: game logic in nightime
+        """
+        pass
+
     def setIdentityList(self, **kwargs):
         """
         Initialize the identity configuration.
