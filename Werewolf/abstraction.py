@@ -3,11 +3,12 @@ import abc
 from time import sleep
 from threading import Thread
 
-from WP.api import ChunckedData, ReceiveThread, ReceiveTimeoutError
+from .WP.api import ChunckedData, ReceiveThread, ReceiveTimeoutError
 
-_default_timeout = 30.0 # 超时时间，是各方法的默认参数
+_default_timeout = 30.0  # 超时时间，是各方法的默认参数
 
-def default_timeout(timeout = None):
+
+def default_timeout(timeout=None):
     """
     Get or set the default timeout value.
 
@@ -25,6 +26,7 @@ def default_timeout(timeout = None):
     if timeout is not None and timeout > 0:
         _default_timeout = timeout
     return _default_timeout
+
 
 class TimeLock(Thread):
     """
@@ -62,14 +64,14 @@ class Person():
     Base class for a player.
 
     Attributes:
-        
+
         id: the identifier of the player.
- 
+
         socket: the outgoing socket for communication with the client
         recv: the incoming socket for communication with the client
         client: the (ip, port) tuple format of address of the client
         server: the (ip, port) tuple format of address of the server
-        
+
         police: bool, whether the player is the police
         innocent: bool, whether the player is innocent, this attribute is for the predictor
         alive: bool whether the player is alive
@@ -101,7 +103,7 @@ class Person():
             server: tuple, same with client
 
         Returns:
-            
+
             Person, the objcet created.
         """
         # AF_INET：使用TCP/IP-IPv4协议簇；SOCK_STREAM：使用TCP流
@@ -110,8 +112,8 @@ class Person():
         self.client = client
         self.server = server
         self.id = id
-        self.police = False # police的值由服务器进行分配，在__init__()方法中被初始化为False
-        self.innocent = True # 如果某个客户端是狼人，则innocent的值为False；否则为True
+        self.police = False  # police的值由服务器进行分配，在__init__()方法中被初始化为False
+        self.innocent = True  # 如果某个客户端是狼人，则innocent的值为False；否则为True
         self.alive = True
         self.recv.bind(server)
         self.recv.listen(1)
@@ -121,7 +123,7 @@ class Person():
         Gets a packet for modification
 
         Parameters:
-            
+
             None
 
         Returns:
@@ -164,15 +166,15 @@ class Person():
             timeout: float, time to wait for the client
 
         Returns:
-            
+
             ChunckedData, the data received
         """
         packet = self._getBasePacket()
-        pakcet['prompt'] = "Please vote for the people to be banished:"
+        packet['prompt'] = "Please vote for the people to be banished:"
         packetSend = ChunckedData(7, **packet)
         sendingThread = Thread(target=packetSend.send(), args=(self.socket, ))
         sendingThread.start()
-        return _startListening(timeout=timeout)
+        return self._startListening(timeout=timeout)
 
     def joinElection(self, timeout: float = _default_timeout):
         """
@@ -183,18 +185,18 @@ class Person():
             timeout: float, time to wait for the client
 
         Returns:
-            
+
             ChunckedData, the data received
         """
         packet = self._getBasePacket()
         packet['format'] = bool
-        packet['prompt'] = 'Do you want to be the policeman?\nYou have %f seconds to decide.' % (timeout, )
+        packet['prompt'] = 'Do you want to be the policeman?\nYou have %f seconds to decide.' % (
+            timeout, )
         packet['timeout'] = timeout
         packetSend = ChunckedData(3, **packet)
         sendingThread = Thread(target=packetSend.send(), args=(self.socket,))
         sendingThread.start()
-        return _startListening(timeout=timeout)
-
+        return self._startListening(timeout=timeout)
 
     def voteForPolice(self, timeout: float = _default_timeout):
         """
@@ -205,16 +207,17 @@ class Person():
             timeout: float, time to wait for the client
 
         Returns:
-            
+
             ChunckedData, the data received
         """
         if not self.police:
             packet = self._getBasePacket()
             packet['prompt'] = "Please vote for the police:"
             packetSend = ChunckedData(7, **packet)
-            sendingThread = Thread(target=packetSend.send(), args=(self.socket, ))
+            sendingThread = Thread(
+                target=packetSend.send(), args=(self.socket, ))
             sendingThread.start()
-            return _startListening(timeout=timeout)
+            return self._startListening(timeout=timeout)
         else:
             return None
 
@@ -227,7 +230,7 @@ class Person():
             val: bool, whether the player is the police
 
         Returns:
-            
+
             None
         """
         self.police = val
@@ -241,7 +244,7 @@ class Person():
             timeout: float, time to wait for the client
 
         Returns:
-            
+
             ChunckedData, the data received
         """
         packet = self._getBasePacket()
@@ -249,7 +252,7 @@ class Person():
         packetSend = ChunckedData(6, **packet)
         sendingThread = Thread(target=packetSend.send(), args=(self.socket, ))
         sendingThread.start()
-        return _startListening(timeout=timeout)
+        return self._startListening(timeout=timeout)
 
 #   def sendMessage(self, data: list = []):
 #       packet = self._getBasePacket()
@@ -279,7 +282,8 @@ class Person():
             packet = self._getBasePacket()
             packet['prompt'] = "Please select the player you want to inherit the police:"
             packetSend = ChunckedData(7, **packet)
-            sendingThread = Thread(target=packetSend.send(), args=(self.socket, ))
+            sendingThread = Thread(
+                target=packetSend.send(), args=(self.socket, ))
             sendingThread.start()
             ret.append(self._startListening(timeout=timeouts[0]))
         else:
@@ -288,7 +292,8 @@ class Person():
             packet = self._getBasePacket()
             packet['timeLimit'] = timeouts[1]
             packetSend = ChunckedData(6, **packet)
-            sendingThread = Thread(target=packetSend.send(), args=(self.socket, ))
+            sendingThread = Thread(
+                target=packetSend.send(), args=(self.socket, ))
             sendingThread.start()
             ret.append(self._startListening(timeout=timeouts[1]))
         else:
@@ -302,6 +307,7 @@ class Villager(Person):
 
     Attributes and methods are inherited from class Person
     """
+
     def __init__(self, id: int, client: tuple, server: tuple):
         super().__init__(id, client, server)
         self.type = 0
@@ -336,13 +342,13 @@ class Wolf(Person):
         self.type = -1
         self.peerList = []
 
-    def setPeer(peer: Wolf):
+    def setPeer(self, peer: Wolf):
         """
         Add a wolf to the list
         """
         self.peerList.append(peer)
 
-    def removePeer(peer: Wolf):
+    def removePeer(self, peer: Wolf):
         """
         Remove a wolf from the list
         """
@@ -355,14 +361,15 @@ class Wolf(Person):
         Parameters:
 
             timeout: float, time to wait for the client
-            
+
         Returns:
 
             ChunckedData, the data received
         """
         packet = self._getBasePacket()
         packet['format'] = int
-        packet['prompt'] = "Please select a person to kill.\nYou have %f seconds to decide with your partner" % (timeout, )
+        packet['prompt'] = "Please select a person to kill.\nYou have %f seconds to decide with your partner" % (
+            timeout, )
         packet['timeout'] = timeout
         packetSend = ChunckedData(3, **packet)
         sendingThread = Thread(target=packetSend.send(), args=(self.socket, ))
@@ -377,10 +384,12 @@ class Wolf(Person):
             elif dataRecv['type'] == 5:
                 dataRecv.pop('type')
                 packetSend = ChunckedData(5, dataRecv)
-                sendingThreads = [Thread(target=packetSend.send(), args=(_, )) for _ in self.peerList.socket]
+                sendingThreads = [Thread(target=packetSend.send(), args=(
+                    _, )) for _ in self.peerList.socket]
                 for thread in sendingThreads:
                     thread.start()
         return None
+
 
 class SkilledPerson(Person):
     """
@@ -395,6 +404,7 @@ class SkilledPerson(Person):
         skill(): ask a player to use his ability.
         postSkill(): set ability availibity.
     """
+
     def __init__(self, id: int, client: tuple, server: tuple):
         """
         Initialization method inherited from class Person
@@ -402,13 +412,13 @@ class SkilledPerson(Person):
         super(SkilledPerson, self).__init__(id, client, server)
         self.used = 0
 
-    def postSkill(self, increment = 1):
+    def postSkill(self, increment=1):
         """
         Sets the used attribute of the player to True
         """
         self.used += increment
 
-    def skill(self, prompt: str = "", timeout: float = _default_timeout, format = int):
+    def skill(self, prompt: str = "", timeout: float = _default_timeout, format=int):
         """
         Ask the player whether to use the skill
 
@@ -430,20 +440,22 @@ class SkilledPerson(Person):
         sendingThread.start()
         return self._startListening(timeout)
 
+
 class KingOfWerewolves(Wolf, SkilledPerson):
     """
     King of werewolves, can kill a person when not being poisoned.
 
     Attributes and methods are inherited from class SkilledPerson.
     """
+
     def __init__(self, id: int, client: tuple, server: tuple):
         super(KingOfWerewolves, self).__init__(id, client, server)
         self.type = -3
 
     def skill(self, timeout: float = _default_timeout):
-       prompt = """Please select a person to kill.
+        prompt = """Please select a person to kill.
 you have %f seconds to decide.""" % (timeout, )
-       return SkilledPerson.skill(self, prompt, timeout)
+        return SkilledPerson.skill(self, prompt, timeout)
 
 
 class WhiteWerewolf(Wolf, SkilledPerson):
@@ -452,6 +464,7 @@ class WhiteWerewolf(Wolf, SkilledPerson):
 
     Attributes and methods are inherited from class SkilledPerson.
     """
+
     def __init__(self, id: int, client: tuple, server: tuple):
         super(WhiteWerewolf, self).__init__(id, client, server)
         self.type = -2
@@ -468,6 +481,7 @@ class Predictor(SkilledPerson):
 
     Attributes and methods are inherited from class SkilledPerson.
     """
+
     def __init__(self, id: int, client: tuple, server: tuple):
         super(Predictor, self).__init__(id, client, server)
         self.type = 1
@@ -484,6 +498,7 @@ class Witch(SkilledPerson):
 
     Attributes and methods are inherited from class SkilledPerson.
     """
+
     def __init__(self, id: int, client: tuple, server: tuple):
         super(Witch, self).__init__(id, client, server)
         self.type = 2
@@ -492,19 +507,21 @@ class Witch(SkilledPerson):
         packet = self._getBasePacket()
         if self.used % 2 == 0:
             killed = 0
-        packet['content'] = "The player %s is killed at night." % (str(killed) if killed else "unknown", )
+        packet['content'] = "The player %s is killed at night." % (
+            str(killed) if killed else "unknown", )
         packetSend = ChunckedData(5, **packet)
-        if self.used == 0: # Not ever used
+        if self.used == 0:  # Not ever used
             prompt = """Please select a person to use the poison. If you want to save the victim, enter "save".
     You have %f seconds to decide.""" % (timeout, )
-        elif self.used == 1: # Saved somebody.
-            prompt = """Please select a person to use the poison. You have %f seconds to decide.""" % (timeout, )
-        elif self.used == 2: # Killed somebody
-            prompt = """If you want to save the victim, enter "save". You have %f seconds to decide.""" % (timeout, )
+        elif self.used == 1:  # Saved somebody.
+            prompt = """Please select a person to use the poison. You have %f seconds to decide.""" % (
+                timeout, )
+        elif self.used == 2:  # Killed somebody
+            prompt = """If you want to save the victim, enter "save". You have %f seconds to decide.""" % (
+                timeout, )
         else:
             return None
         return SkilledPerson.skill(self, prompt, timeout, (int, str))
-
 
 
 class Hunter(SkilledPerson):
@@ -513,6 +530,7 @@ class Hunter(SkilledPerson):
 
     Attributes and methods are inherited from class SkilledPerson.
     """
+
     def __init__(self, id: int, client: tuple, server: tuple):
         super(Hunter, self).__init__(id, client, server)
         self.type = 3
@@ -529,6 +547,7 @@ class Guard(SkilledPerson):
 
     Attributes and methods are inherited from class SkilledPerson.
     """
+
     def __init__(self, id: int, client: tuple, server: tuple):
         super(Guard, self).__init__(id, client, server)
         self.type = 4
@@ -545,6 +564,7 @@ class Idiot(SkilledPerson):
 
     Attributes and methods are inherited from class SkilledPerson.
     """
+
     def __init__(self, id: int, client: tuple, server: tuple):
         super(Idiot, self).__init__(id, client, server)
         self.type = 5
@@ -556,7 +576,7 @@ class Idiot(SkilledPerson):
         self.postSkill()
 
     def onDead(self, killedAtNight, withFinalWords, timeouts):
-        if killedAtNight or self.used: 
+        if killedAtNight or self.used:
             return super().onDead(withFinalWords, timeouts)
         else:
             self.skill()

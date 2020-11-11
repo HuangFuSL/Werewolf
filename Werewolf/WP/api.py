@@ -5,15 +5,17 @@ import threading
 from io import BytesIO
 from .utils import _checkParam
 
+
 class PacketTypeMismatchException(Exception):
 
     def __init__(self, packetType: int, fieldName: str):
         super.__init__()
         self.type = packetType
         self.field = fieldName
-    
+
     def __str__(self):
         return "Packet type %d requires field '%s', which is not found." % (self.type, self.field)
+
 
 class PacketFieldMismatchException(Exception):
 
@@ -27,6 +29,7 @@ class PacketFieldMismatchException(Exception):
     def __str__(self):
         return "Field %s of packet type %d requires type %s, got %s." % (self.name, self.type, str(self.expected), str(self.field))
 
+
 class NotConnectedError(Exception):
 
     def __init__():
@@ -34,6 +37,7 @@ class NotConnectedError(Exception):
 
     def __str__(self):
         return 'The socket is not connected.'
+
 
 class ReceiveTimeoutError(Exception):
 
@@ -65,10 +69,12 @@ class ChunckedData(object):
             try:
                 for i in _checkParam[''].keys():
                     if not isinstance(self.content[i], _checkParam[''][i]):
-                        raise PacketFieldMismatchException(self.type, i, type(self.content[i]), type(_checkParam[''][i]))
+                        raise PacketFieldMismatchException(self.type, i, type(
+                            self.content[i]), type(_checkParam[''][i]))
                 for i in _checkParam[self.type].keys():
                     if not isinstance(self.content[i], _checkParam[self.type][i]):
-                        raise PacketFieldMismatchException(self.type, i, type(self.content[i]), type(_checkParam[self.type][i]))
+                        raise PacketFieldMismatchException(self.type, i, type(
+                            self.content[i]), type(_checkParam[self.type][i]))
             except KeyError as a:
                 raise PacketTypeMismatchException(self.type, *a.args)
 
@@ -80,11 +86,11 @@ class ChunckedData(object):
             return self.content['destAddr'], self.content['destPort']
 
     def setValue(self, name, value):
-        self.content[name] = value       
+        self.content[name] = value
 
     @staticmethod
     def _compress(content: str) -> bytearray:
-        buffer = BytesIO()   
+        buffer = BytesIO()
         with gzip.GzipFile(mode="wb", fileobj=buffer) as compressor:
             compressor.write(content.encode(encoding='utf-8'))
         return buffer.getvalue()
@@ -102,16 +108,20 @@ class ChunckedData(object):
 
     def send(self, connection: socket.socket, dest: tuple):
         connection.connect(dest)
-        assert (self.content['destAddr'], self.content['destPort']) == connection.getpeername()
+        assert (self.content['destAddr'],
+                self.content['destPort']) == connection.getpeername()
         connection.send(self.toBytesArray())
+
 
 def _recv(connection: socket.socket) -> ChunckedData:
     connection.listen(5)
     c, addr = connection.accept()
     ret = ChunckedData(0, rawData=c.recv(16384))
-    assert (ret.content['destAddr'], ret.content['destPort']) == c.getsockname()
+    assert (ret.content['destAddr'],
+            ret.content['destPort']) == c.getsockname()
     c.close()
     return ret
+
 
 class ReceiveThread(threading.Thread):
 
@@ -137,12 +147,11 @@ class ReceiveThread(threading.Thread):
                 self.exitcode = 1
                 self.exception = ReceiveTimeoutError(self.timeout)
                 self.exc_traceback = str(self.exception)
-                
 
     def getResult(self) -> ChunckedData:
         try:
             assert not isinstance(self.exception, ReceiveTimeoutError)
-            return self.result  
+            return self.result
         except AssertionError:
             raise self.exception
         except:
