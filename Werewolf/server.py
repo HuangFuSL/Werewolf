@@ -13,57 +13,57 @@ from server import logic
 HOST = ''
 SERVER_PORT = 21567
 BUFSIZ = 1024
-ADDR = (HOST,SERVER_PORT)
+ADDR = (HOST, SERVER_PORT)
 
-tcpSerSock = socket(AF_INET,SOCK_STREAM)
+tcpSerSock = socket(AF_INET, SOCK_STREAM)
 
-#input the number of clients
+# input the number of clients
 playerCount = input('>')
 while(not(type(playerCount) == int and playerCount >= 6 and playerCount <= 12)):
     print('Please input the right number between 6 and 12!')
     playerCount = input('>')
 print('the number of players is: %d' % playerCount)
 
-#wait for client connection and create the connection
+# wait for client connection and create the connection
 game = Game(playerCount)
 for idclient in range(1, int(playerCount) + 1):
     tcpSerSock.bind(ADDR)
     tcpSerSock.listen(5)
     print('waiting for client %d connection...' % idclient)
     tcpCliSock, addr = tcpSerSock.accept()
-    print('...connnecting client %d from:'% idclient, addr)
+    print('...connnecting client %d from:' % idclient, addr)
     game.addAddr(addr[1], addr[0])
 
-#allocate the identity and tell to the corresponding client
+# allocate the identity and tell to the corresponding client
 game.allocateIdentity(ADDR)
 
-#if the game not ends
+# if the game not ends
 
-    #prompt for action of werewolves
+# prompt for action of werewolves
 
-    #prompt for action of witch
+# prompt for action of witch
 
-    #prompt for action of predictor
+# prompt for action of predictor
 
-    #prompt for action of guard
+# prompt for action of guard
 
-    #if is the first night
+# if is the first night
 
-        #prompt for the election of police
+# prompt for the election of police
 
-        #the candidate talks
+# the candidate talks
 
-        #vote
+# vote
 
-        #announce the police
+# announce the police
 
-    #announce the victim
+# announce the victim
 
-    #prompt and wait for the conversation
+# prompt and wait for the conversation
 
-    #vote
+# vote
 
-    #announce the exile
+# announce the exile
 
 """
 set connections with clients and distribute identity
