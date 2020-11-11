@@ -4,12 +4,13 @@ import socket
 import threading
 from io import BytesIO
 from .utils import _checkParam
+from typing import Any, Optional, Tuple
 
 
 class PacketTypeMismatchException(Exception):
 
     def __init__(self, packetType: int, fieldName: str):
-        super.__init__()
+        super().__init__()
         self.type = packetType
         self.field = fieldName
 
@@ -20,7 +21,7 @@ class PacketTypeMismatchException(Exception):
 class PacketFieldMismatchException(Exception):
 
     def __init__(self, packetType: int, fieldName: str, fieldType: type, expectedType: type):
-        super.__init__()
+        super().__init__()
         self.type = packetType
         self.name = fieldName
         self.field = fieldType
@@ -32,8 +33,8 @@ class PacketFieldMismatchException(Exception):
 
 class NotConnectedError(Exception):
 
-    def __init__():
-        super.__init__()
+    def __init__(self):
+        super().__init__()
 
     def __str__(self):
         return 'The socket is not connected.'
@@ -41,7 +42,7 @@ class NotConnectedError(Exception):
 
 class ReceiveTimeoutError(Exception):
 
-    def __init__(self, timeout: int):
+    def __init__(self, timeout: float):
         self.timeout = timeout
         super(ReceiveTimeoutError).__init__()
 
@@ -50,6 +51,19 @@ class ReceiveTimeoutError(Exception):
 
 
 class ChunckedData(object):
+
+    @staticmethod
+    def _compress(content: str) -> bytearray:
+        buffer = BytesIO()
+        with gzip.GzipFile(mode="wb", fileobj=buffer) as compressor:
+            compressor.write(content.encode(encoding='utf-8'))
+        return bytearray(buffer.getvalue())
+
+    @staticmethod
+    def _decompress(data: bytearray) -> str:
+        buffer = BytesIO(bytes(data))
+        with gzip.GzipFile(mode='rb', fileobj=buffer) as output:
+            return str(output.read())
 
     def __init__(self, packetType: int, **kwargs):
         """
@@ -78,7 +92,7 @@ class ChunckedData(object):
             except KeyError as a:
                 raise PacketTypeMismatchException(self.type, *a.args)
 
-    def getAddr(self, dest: str) -> tuple:
+    def getAddr(self, dest: str) -> Tuple[str, int]:
         assert dest in ('source', 'destination')
         if (dest == 'source'):
             return self.content['srcAddr'], self.content['srcPort']
@@ -88,29 +102,16 @@ class ChunckedData(object):
     def setValue(self, name, value):
         self.content[name] = value
 
-    @staticmethod
-    def _compress(content: str) -> bytearray:
-        buffer = BytesIO()
-        with gzip.GzipFile(mode="wb", fileobj=buffer) as compressor:
-            compressor.write(content.encode(encoding='utf-8'))
-        return buffer.getvalue()
-
-    @staticmethod
-    def _decompress(data: bytearray) -> str:
-        buffer = BytesIO(data)
-        with gzip.GzipFile(mode='rb', fileobj=buffer) as output:
-            return output.read()
-
     def toBytesArray(self) -> bytearray:
         c = self.content.copy()
         c['type'] = self.type
         return self._compress(json.dumps(c))
 
-    def send(self, connection: socket.socket, dest: tuple):
+    def send(self, connection: socket.socket, dest: Tuple[Any, Any]):
         connection.connect(dest)
         assert (self.content['destAddr'],
                 self.content['destPort']) == connection.getpeername()
-        connection.send(self.toBytesArray())
+        connection.send(bytes(self.toBytesArray()))
 
 
 def _recv(connection: socket.socket) -> ChunckedData:
@@ -131,7 +132,7 @@ class ReceiveThread(threading.Thread):
         self.timeout = timeout
         self.connection = connection
         self.exitcode = 0
-        self.exception = None
+        self.exception = ReceiveTimeoutError(self.timeout)
         self.exc_traceback = ''
 
     def run(self):
@@ -148,7 +149,7 @@ class ReceiveThread(threading.Thread):
                 self.exception = ReceiveTimeoutError(self.timeout)
                 self.exc_traceback = str(self.exception)
 
-    def getResult(self) -> ChunckedData:
+    def getResult(self) -> Optional[ChunckedData]:
         try:
             assert not isinstance(self.exception, ReceiveTimeoutError)
             return self.result

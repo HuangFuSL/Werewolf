@@ -18,7 +18,7 @@ ADDR = (HOST, PORT)
 
 class IoThread(Thread):
     def __init__(self, threadID, ChunkedData):
-        super().__init__(self)
+        super().__init__()
         self.threadID = threadID
         self.packet = ChunkedData
 
@@ -42,6 +42,7 @@ class Player():
         return ret
 
     def _register(self):
+        global ADDR
         packet = self._getBasePacket()
         packetSend = ChunckedData(1, **packet)
         packetSend.send(self.socket, ADDR)

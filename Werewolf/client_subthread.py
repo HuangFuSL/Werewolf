@@ -1,7 +1,6 @@
 from .abstraction import *
 from .WP import ChunckedData
 from threading import Thread
-from .util import getIndentity, getBasePacket
 from .WP.utils import _checkParam, _packetType
 
 
