@@ -1,11 +1,8 @@
-from abstraction import *
-from WP import ChunckedData
+from .abstraction import *
+from .WP import ChunckedData
 from threading import Thread
-from api import *
-from util import getIndentity, getBasePacket
-import thread
-from WP.utils import _checkParam, _packetType
-
+from .util import getIndentity, getBasePacket
+from .WP.utils import _checkParam, _packetType
 
 
 class ReceiveTimeoutError(Exception):
@@ -17,13 +14,17 @@ class ReceiveTimeoutError(Exception):
     def __str__(self):
         return "Data receive timeout."
 
+# 为什么要加下面这一堆函数呢，直接调构造函数不好吗？
+
+
 def comPack2(seat) -> ChunckedData:
     """
     compress the return packet of -1,
     whose packetType number is 2
     """
-    ret = ChunckedData(2,chosenSeat = seat)
+    ret = ChunckedData(2, chosenSeat=seat)
     return ret
+
 
 def comPack_3(target) -> ChunckedData:
     """
@@ -31,33 +32,38 @@ def comPack_3(target) -> ChunckedData:
    which is -3
     """
 
-    ret = ChunckedData(-3,target = target)
+    ret = ChunckedData(-3, target=target)
     return ret
+
 
 def comPack_4() -> ChunckedData:
-    ret = ChunckedData(-4, ACK = True)
+    ret = ChunckedData(-4, ACK=True)
     return ret
+
 
 def comPack_6(content) -> ChunckedData:
-    ret = ChunckedData(-6, content = content)
+    ret = ChunckedData(-6, content=content)
     return ret
+
 
 def comPack_7(candidate) -> ChunckedData:
-    if(candidate.isspace() == True ) :
-        ret = ChunckedData(-7,vote = False, candidate = 0)
-    else :
-        ret = ChunckedData(-7, vote = True, candidate = candidate)
+    if(candidate.isspace() == True):
+        ret = ChunckedData(-7, vote=False, candidate=0)
+    else:
+        ret = ChunckedData(-7, vote=True, candidate=candidate)
 
     return ret
 
+
 def playerResponse(ret):
-    type = (int)ret.packetType
+    type = int(ret.packetType)
 
     if (type == -1):
         """
         -1是服务器发出的建立连接的信息
         """
-        print("%d seat(s) remained and the seats you can choose are :" %(ret.content['playerRemaining']))
+        print("%d seat(s) remained and the seats you can choose are :" %
+              (ret.content['playerRemaining']))
         for x in ret.content['playerSeats']:
             print(x, end=' ')
         print("Please enter the number of seat you choose: ")
@@ -71,10 +77,11 @@ def playerResponse(ret):
         """
         if (ret.content['success'] == True):
             print("Successfully chose the seat! ")
-        else
+        else:
             print("The seat you chose was taken.")
 
-        print("your seat is %d and your identity is %d" %(ret.content['chosenSeat'],ret.content['identity']))
+        print("your seat is %d and your identity is %d" %
+              (ret.content['chosenSeat'], ret.content['identity']))
 
     elif(type == 3):
         """
@@ -84,7 +91,7 @@ def playerResponse(ret):
         print(ret.content['format'])
         print('\n')
         print(ret.content['prompt'])
-        print("the time limit is %d" %(ret.content['timeLimit']))
+        print("the time limit is %d" % (ret.content['timeLimit']))
 
         ReceiveTimeoutError(timeout=ret.content['timeLimit'])
 
@@ -109,7 +116,7 @@ def playerResponse(ret):
         print(ret.content['content'])
 
     elif(type == 6):
-        print("the time for you to speak is %d" %(ret.content['timeLimit']))
+        print("the time for you to speak is %d" % (ret.content['timeLimit']))
         ReceiveTimeoutError(timeout=ret.content['timeLimit'])
         content = input()
 
@@ -123,4 +130,3 @@ def playerResponse(ret):
 
     elif(type == 8):
         pass
-
