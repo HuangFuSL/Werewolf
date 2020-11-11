@@ -51,13 +51,14 @@ class Game:
         """
 
         # Attribute initialization
-        self.playerCount = playerCount
-        self.activePlayer = {}
-        self.listeningAddr = (ip, port)
-        self.ports = list(range(port + 1, port + playerCount + 2))
-        self.running = False
-        self.identityList = []
-        self.listener = IncomingConnection(self.listeningAddr, self)
+        self.playerCount: int = playerCount
+        self.activePlayer: dict = {}
+        self.listeningAddr: Tuple[str, int] = (ip, port)
+        self.ports: list = list(range(port + 1, port + playerCount + 2))
+        self.running: bool = False
+        self.identityList: list = []
+        self.listener: IncomingConnection = IncomingConnection(
+            self.listeningAddr, self)
         # Further initialization
         self.listener.setName("Incoming connection receiver")
         # Verbose
@@ -142,7 +143,6 @@ class Game:
         """
         TODO: game logic in nightime
         """
-        pass
 
     def setIdentityList(self, **kwargs):
         """
@@ -197,9 +197,9 @@ class Game:
         # `identityList` must be initialized
         assert len(self.identityList) != 0
         # Read the content of the packet
-        server = data.getAddr("destination")
-        client = data.getAddr("source")
-        id = data.content["chosenSeat"]
+        server: Tuple[str, int] = data.getAddr("destination")
+        client: Tuple[str, int] = data.getAddr("source")
+        id: int = data.content["chosenSeat"]
         # Verify the seat is available
         if id in range(1, self.playerCount + 1) and id not in self.activePlayer.keys():
             self.activePlayer[id] = self.identityList.pop()(
@@ -213,13 +213,14 @@ class Game:
                 id=id, server=server, client=client
             )
         # Send response
-        identity = getIdentityCode(self.activePlayer[id])
-        packet = getBasePacket(server, client)
+        identity: int = getIdentityCode(self.activePlayer[id])
+        packet: dict = getBasePacket(server, client)
         packet["success"] = True
         packet["chosenSeat"] = id
         packet["identity"] = identity
-        sendingThread = Thread(
-            target=ChunckedData(-2, **packet).send, args=(self.activePlayer[id].socket,)
+        sendingThread: Thread = Thread(
+            target=ChunckedData(-2, **
+                                packet).send, args=(self.activePlayer[id].socket,)
         )
         sendingThread.start()
 
@@ -233,8 +234,8 @@ class IncomingConnection(Thread):
 
     def __init__(self, addr: Tuple[str, int], dest: Game):
         super(IncomingConnection, self).__init__()
-        self.address = addr
-        self.game = dest
+        self.address: Tuple[str, int] = addr
+        self.game: Game = dest
 
     def run(self):
         receivingSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)

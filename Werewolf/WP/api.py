@@ -11,8 +11,8 @@ class PacketTypeMismatchException(Exception):
 
     def __init__(self, packetType: int, fieldName: str):
         super().__init__()
-        self.type = packetType
-        self.field = fieldName
+        self.type: int = packetType
+        self.field: str = fieldName
 
     def __str__(self):
         return "Packet type %d requires field '%s', which is not found." % (self.type, self.field)
@@ -22,10 +22,10 @@ class PacketFieldMismatchException(Exception):
 
     def __init__(self, packetType: int, fieldName: str, fieldType: type, expectedType: type):
         super().__init__()
-        self.type = packetType
-        self.name = fieldName
-        self.field = fieldType
-        self.expected = expectedType
+        self.type: int = packetType
+        self.name: str = fieldName
+        self.field: type = fieldType
+        self.expected: type = expectedType
 
     def __str__(self):
         return "Field %s of packet type %d requires type %s, got %s." % (self.name, self.type, str(self.expected), str(self.field))
@@ -43,7 +43,7 @@ class NotConnectedError(Exception):
 class ReceiveTimeoutError(Exception):
 
     def __init__(self, timeout: float):
-        self.timeout = timeout
+        self.timeout: float = timeout
         super(ReceiveTimeoutError).__init__()
 
     def __str__(self):
@@ -54,14 +54,14 @@ class ChunckedData(object):
 
     @staticmethod
     def _compress(content: str) -> bytearray:
-        buffer = BytesIO()
+        buffer: BytesIO = BytesIO()
         with gzip.GzipFile(mode="wb", fileobj=buffer) as compressor:
             compressor.write(content.encode(encoding='utf-8'))
         return bytearray(buffer.getvalue())
 
     @staticmethod
     def _decompress(data: bytearray) -> str:
-        buffer = BytesIO(bytes(data))
+        buffer: BytesIO = BytesIO(bytes(data))
         with gzip.GzipFile(mode='rb', fileobj=buffer) as output:
             return str(output.read())
 
@@ -69,7 +69,8 @@ class ChunckedData(object):
         """
         Defines a new data packet.
         """
-        self.type = packetType
+        self.type: int = packetType
+        self.content: dict = {}
         if self.type == 0:
             try:
                 self.content = json.loads(self._decompress(kwargs['rawData']))
@@ -128,18 +129,16 @@ class ReceiveThread(threading.Thread):
 
     def __init__(self, connection: socket.socket, timeout: float = 0):
         super(ReceiveThread, self).__init__()
-        self.result = None
-        self.timeout = timeout
-        self.connection = connection
-        self.exitcode = 0
-        self.exception = ReceiveTimeoutError(self.timeout)
-        self.exc_traceback = ''
+        self.result: Any = None
+        self.timeout: float = timeout
+        self.connection: socket.socket = connection
+        self.exception: ReceiveTimeoutError = ReceiveTimeoutError(self.timeout)
 
     def run(self):
         if not self.timeout:
             self.result = _recv(self.connection)
         else:
-            dest = ReceiveThread(self.connection)
+            dest: ReceiveThread = ReceiveThread(self.connection)
             dest.setDaemon(True)
             dest.start()
             dest.join(self.timeout)
