@@ -14,6 +14,7 @@ HOST = '127.0.0.1'
 PORT = 21567
 BUFSIZE = 1024
 ADDR = (HOST, PORT)
+ROLE = 0
 
 
 class IoThread(Thread):
@@ -42,14 +43,14 @@ class Player():
         return ret
 
     def _register(self):
-        global ADDR
+        global ADDR, ROLE
         packet = self._getBasePacket()
         packetSend = ChunckedData(1, **packet)
         packetSend.send(self.socket, ADDR)
         regInfo = _recv(self.socket)
         self.id = regInfo.content['Seat']
-        self.role = regInfo.content['identity']
-        print("Your identity is %d/n " % self.role)
+        ROLE = regInfo.content['identity']
+        print("Your identity is %d/n " % ROLE)
 
         self.police = False
         self.alive = True
@@ -72,7 +73,7 @@ class Player():
             #   猎人：3
             #   守卫：4
             #   白痴：5
-            if player.role != 1:  # 我这里假定1是狼人了，没找到各角色对应的序号，以后再改叭
+            if ROLE != -1:
                 pass
             else:
                 packet = self._getBasePacket()
