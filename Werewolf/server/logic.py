@@ -164,51 +164,76 @@ class Game:
 
         The police elected. If a wolf explodes, returns None.
         """
-        # Send for election
+
+        # Ask for election
         electionCandidate = [(player, player.joinElection())
                              for player in self.activePlayer]
         for _, thread in electionCandidate:
             thread.join()
         candidate: list = []
         for _, __ in electionCandidate:
+            """
+            _ : player
+            __: the corresponding ReceiveThread object
+            """
             if __.getResult() is not None and __.getResult().content['action']:
                 candidate.append(_)
         current: ReceiveThread
+
         # Candidate talk in sequence
-        for player in candidate:
-            current = player.speak()
-            current.join()
-            self.broadcast(player, current.getResult().content['content'])
-        # Ask for vote
-        voteThread: List[ReceiveThread] = []
-        for player in self.activePlayer:
-            if player in candidate:
-                continue  # Candidate cannot vote
-            voteThread.append(player.voteForPolice)
-        for thread in voteThread:
-            thread.join()
-        # Get the result
-        vote: list = []
-        for thread in voteThread:
-            if thread.getResult() is None:
-                continue
-            if thread.getResult().content['vote']:
-                vote.append(thread.getResult().content['candidate'])
-        # Count the vote
-        voteList: dict = {i: len(list(j)) for i, j in groupby(sorted(vote))}
-        result, max = [], 0
-        for i in voteList:
-            if voteList[i] > max:
-                result.clear()
-            if voteList[i] >= max:
-                result.append(i)
-        if (len(result) == 1):
-            self.broadcast(None, "The police is player %d" % (result[0], ))
-            self.police = self.activePlayer[result[0]]
-            return None
-        else:
-            # ANCHOR: Re-elect for the police
-            pass
+        for i in range(2):
+            """
+            Vote for the police
+
+            Loop variable: i - only a counter
+            """
+            for player in candidate:
+                current = player.speak()
+                current.join()
+                self.broadcast(player, current.getResult().content['content'])
+
+            # Ask for vote
+            voteThread: List[ReceiveThread] = []
+            for player in self.activePlayer:
+                if player in candidate:
+                    continue  # Candidate cannot vote
+                voteThread.append(player.voteForPolice)
+            for thread in voteThread:
+                thread.join()
+
+            # Get the result
+            vote: list = []
+            for thread in voteThread:
+                if thread.getResult() is None:
+                    continue
+                if thread.getResult().content['vote']:
+                    vote.append(thread.getResult().content['candidate'])
+
+            # Count the vote
+            voteList: dict = {i: len(list(j))
+                              for i, j in groupby(sorted(vote))}
+            result, max = [], 0
+            for i in voteList:
+                if voteList[i] > max:
+                    result.clear()
+                if voteList[i] >= max:
+                    result.append(i)
+
+            if (len(result) == 1):
+                self.broadcast(None, "The police is player %d" % (result[0], ))
+                self.police = self.activePlayer[result[0]]
+                return None
+            else:
+                self.broadcast(
+                    None,
+                    "Another election is needed, candidates are %s" % ", ".join(
+                        [str(_) for _ in result]
+                    )
+                )
+                candidate.clear()
+                candidate = [self.activePlayer[_] for _ in result]
+        self.police = None
+        return None
 
     def dayTime(self):
         """
