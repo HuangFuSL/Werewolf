@@ -22,7 +22,7 @@ class Game:
     - ports       : `list`,               the ports available for communication with the player
     - running     : `bool`,               the status of the game, can set to `True` when the `identityList` is empty and the length of `activePlayer` equals with `playerCount`
     - identityList: `list`,               used when allocating the user identity
-    - listner     : `IncomingConnection`, the thread for receiving handshakes
+    - listener     : `IncomingConnection`, the thread for receiving handshakes
 
     ## Methods
 
@@ -67,6 +67,9 @@ class Game:
         self.day: int = 0
         self.night: int = 0
         self.police = None
+
+        self.victim: int = 0
+        self.savedLastNight: int = 0
         # Verbose
         print("Server port: ", ", ".join([str(_) for _ in self.ports]))
 
@@ -140,6 +143,18 @@ class Game:
             return -1
 
     def broadcast(self, srcPlayer, content: str):
+        """
+        Send a packet to all the players except the `srcPlayer` (if not `None`)
+
+        ### Parameters
+
+        - srcPlayer: the player to skip
+        - content: the content of the announcement
+
+        ### Return
+
+        None
+        """
         for player in self.activePlayer:
             if player == srcPlayer:
                 continue
@@ -201,23 +216,20 @@ class Game:
             for thread in voteThread:
                 thread.join()
 
-            # Get the result
+            # Get the result and count the vote
             vote: list = []
+            packetContent: dict = {}
             for thread in voteThread:
                 if thread.getResult() is None:
                     continue
-                if thread.getResult().content['vote']:
-                    vote.append(thread.getResult().content['candidate'])
+                packetContent = thread.getResult().content
+                if packetContent['vote'] and packetContent['candidate'] in self.activePlayer:
+                    vote.append(packetContent['candidate'])
+            result: List[int] = getVotingResult(vote)
 
-            # Count the vote
-            voteList: dict = {i: len(list(j))
-                              for i, j in groupby(sorted(vote))}
-            result, max = [], 0
-            for i in voteList:
-                if voteList[i] > max:
-                    result.clear()
-                if voteList[i] >= max:
-                    result.append(i)
+            del voteThread
+            del vote
+            del packetContent
 
             if (len(result) == 1):
                 self.broadcast(None, "The police is player %d" % (result[0], ))
@@ -268,7 +280,113 @@ class Game:
           - The guard cannot guard a player in two consecutive nights.
         """
         # ANCHOR: Implement the game logic at night
-        pass
+
+        # Parameters:
+        victimByWolf: int = 0
+        victimByWitch: int = 0
+        predictorTarget: int = 0
+        witchTarget: int = 0
+        witchType: bool
+        guardTarget: int = 0
+        hunterStatus: bool = True
+
+        # Wolves wake up
+        wolfThread: List[ReceiveThread] = []
+        for player in self.activePlayer:
+            if isinstance(player, (Wolf, KingOfWerewolves, WhiteWerewolf)):
+                ret: Optional[ReceiveThread] = player.kill()
+                if ret is not None:
+                    wolfThread.append(ret)
+        if wolfThread:  # Only used for indention
+            for thread in wolfThread:
+                thread.join()
+
+            vote: List[int] = []
+            packetContent: dict = {}
+
+            for thread in wolfThread:
+                if thread.getResult() is None:
+                    continue
+                packetContent: dict = thread.getResult().content
+                if packetContent['vote'] and packetContent['candidate'] in self.activePlayer:
+                    vote.append(packetContent['candidate'])
+
+            result: List[int] = getVotingResult(vote)
+
+            shuffle(result)
+            victimByWolf = result[0]
+
+            del vote
+            del packetContent
+            del result
+        del wolfThread
+
+        # Predictor wake up
+        predictorThread: Optional[ReceiveThread] = None
+        predictor: Optional[Predictor] = None
+
+        for player in self.activePlayer:
+            if isinstance(player, Predictor):
+                predictor = player
+                predictorThread = player.skill()
+        if predictor is not None and predictorThread is not None:
+            packetContent: dict = predictorThread.getResult().content
+            if packetContent['action'] and packetContent['target'] in self.activePlayer:
+                predictorTarget = packetContent['target']
+
+            # Notice: the server need to send a response here, and the packet type is -3
+            # The 'action' field is the identity of the target.
+
+            packetContent.update(**predictor._getBasePacket())
+            packetContent['action'] = getIdentityCode(
+                self.activePlayer[predictorTarget]) >= 0
+            sendingThread: Thread = Thread(
+                target=ChunckedData(-1, **
+                                    packetContent).send, args=(predictor.socket,)
+            )
+            sendingThread.start()
+            del packetContent
+        del predictorThread
+
+        # Witch wake up
+        witchThread: Optional[ReceiveThread] = None
+        witch: Optional[Witch] = None
+
+        for player in self.activePlayer:
+            if isinstance(player, Witch):
+                witch = player
+                witchThread = player.skill(killed=victimByWolf)
+        if witch is not None and witchThread is not None:
+            packetContent: dict = witchThread.getResult().content
+            if packetContent['action']:
+                if packetContent['target'] == 0 and witch.used % 2 == 0:
+                    victimByWolf *= -1  # Wait for guard
+                    witch.used += 1
+                elif packetContent['target'] in self.activePlayer and witch.used < 2:
+                    victimByWitch = packetContent['target']
+                    witch.used += 2
+
+            del packetContent
+        del witchThread
+
+        # Guard wake up
+
+        guardThread: Optional[ReceiveThread] = None
+        guard: Optional[Guard] = None
+
+        for player in self.activePlayer:
+            if isinstance(player, Guard):
+                guard = player
+                guardThread = player.skill()
+        if guard is not None and guardThread is not None:
+            packetContent: dict = guardThread.getResult().content
+            if packetContent['action']:
+                if packetContent['target'] in self.activePlayer:
+                    guardTarget = packetContent['target']
+                    victimByWolf *= -1 if guardTarget + victimByWolf == 0 else 1
+
+            del packetContent
+        del guardThread
 
     def setIdentityList(self, **kwargs):
         """

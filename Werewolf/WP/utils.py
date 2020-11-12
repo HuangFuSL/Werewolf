@@ -42,7 +42,7 @@ _checkParam = {
     3: {
         # 'identityLimit': tuple,         # 能收到消息的玩家身份列表
         # 'playerNumber': int,          # 目的玩家编号（deprecated）
-        'format': tuple,                # 玩家应当输入的格式
+        'format': str,                  # 玩家应当输入的格式，示例 "int" 或 "(str, int)"
         'prompt': str,                  # 输入提示
         'timeLimit': int                # 时间限制
     },

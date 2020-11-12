@@ -81,7 +81,7 @@ class Person():
 
     Private methods:
 
-        _getBasepacket(): Get a template of the packet
+        _getBasePacket(): Get a template of the packet
         _startListening(): Listen to the port and return the data received
 
     Methods:
@@ -383,22 +383,24 @@ class Wolf(Person):
         timer = TimeLock(timeout)
         timer.setDaemon(True)
         timer.start()
+        recv: ReceiveThread = self._startListening(timeout)
+        recv.start()
         while not timer.getStatus():
-            recv: ReceiveThread = self._startListening(timeout)
             recv.join()
             dataRecv: Optional[ChunckedData] = recv.getResult()
             if dataRecv is None or dataRecv.content['type'] == -3:
                 return recv
             elif dataRecv.content['type'] == 5:
-                dataRecv.content.pop('type')
+                packet: dict = dataRecv.content.copy()
+                recv.start()
+                packet.pop('type')
                 for peer in self.peerList:
-                    dataRecv.content['srcAddr'], dataRecv.content['srcPort'] = *peer.server
-                    dataRecv.content['destAddr'], dataRecv.content['destPort'] = *peer.client
-                    packetSend = ChunckedData(5, **dataRecv.content)
+                    packet.update(**peer._getBasePacket())
+                    packetSend = ChunckedData(5, **packet)
                     thread = Thread(target=packetSend.send,
                                     args=(peer.socket, ))
                     thread.start()
-        return None
+        return recv
 
 
 class SkilledPerson(Person):
@@ -531,7 +533,7 @@ class Witch(SkilledPerson):
                 timeout, )
         else:
             return None
-        return SkilledPerson.skill(self, prompt, timeout, (int, str))
+        return SkilledPerson.skill(self, prompt, timeout, "(int, str)")
 
 
 class Hunter(SkilledPerson):
