@@ -13,16 +13,15 @@ _packetType = {
     "EncodedData": 0,
     "Establish": 1,    # 客户端建立与服务器的连接时发送
     "EstablishResp": -1,   # 服务器回送连接建立信息，内容包括当前房间剩余的人数，及可供选择的座位
-    "ActionPrompt": 2,    # 服务器请求玩家执行操作，内容包括玩家身份限制、输入格式限制、参数与文本提示
-    "ActionResp": -2,   # 客户端回送执行的操作，内容包括是否执行操作，操作目标等
-    "InformationPublishing": 3,    # 服务器公布信息，如猎人开枪状态、死讯等
-    "InformationPublishingResp": -3,   # 客户端确认收到信息
-    "FreeConversation": 4,    # 自由交谈状态，服务器自动转发所有符合条件的包，内容包括交谈内容及目标，服务器会发送一个空包作为请求
-    "LimitedConversation": 5,    # 发言阶段，在开始前服务器会发送一个空包作为请求，内容包含交谈内容及时间限制
-    "LimitedConversationResp": -5,   # 发言阶段，服务器确认收到信息
-    "Vote": 6,    # 服务器发起投票
-    "VoteResp": -6,   # 客户端回送投票结果
-    "Death": 7     # 服务器提示客户端出局
+    "ActionPrompt": 3,    # 服务器请求玩家执行操作，内容包括玩家身份限制、输入格式限制、参数与文本提示
+    "ActionResp": -3,   # 客户端回送执行的操作，内容包括是否执行操作，操作目标等
+    "InformationPublishing": 4,    # 服务器公布信息，如猎人开枪状态、死讯等
+    "FreeConversation": 5,    # 自由交谈状态，服务器自动转发所有符合条件的包，内容包括交谈内容及目标，服务器会发送一个空包作为请求
+    "LimitedConversation": 6,    # 发言阶段，在开始前服务器会发送一个空包作为请求，内容包含交谈内容及时间限制
+    "LimitedConversationResp": -6,   # 发言阶段，服务器确认收到信息
+    "Vote": 7,    # 服务器发起投票
+    "VoteResp": -7,   # 客户端回送投票结果
+    "Death": 8     # 服务器提示客户端出局
 }
 
 _checkParam = {
@@ -40,34 +39,32 @@ _checkParam = {
         'Seat': int,                    # 分配的座位号
         'identity': int                # 分配的身份
     },
-    2: {
-        'identityLimit': tuple,         # 能收到消息的玩家身份列表
+    3: {
+        # 'identityLimit': tuple,         # 能收到消息的玩家身份列表
         # 'playerNumber': int,          # 目的玩家编号（deprecated）
         'format': tuple,                # 玩家应当输入的格式
         'prompt': str,                  # 输入提示
         'timeLimit': int                # 时间限制
     },
-    -2: {
+    -3: {
         'action': bool,                 # 玩家是否执行操作（若回送，指玩家作用是否成功）
         'target': int                   # 玩家执行操作的目标
     },
-    3: {
-        'description': str,             # 要公布的消息
-        'parameter': tuple,             # 对象
-    },
-    -3: {'ACK': bool},  # 确认，永远为true
     4: {
+        'content': str,             # 要公布的消息
+    },
+    5: {
         'content': str                 # 自由交谈的内容
         # 'type': tuple                   # 能收到消息的身份列表，空列表指全部玩家
     },
-    5: {'timeLimit': int},              # 时间限制
-    -5: {'content': str},               # 发送的消息
-    6: {
+    6: {'timeLimit': int},              # 时间限制
+    -6: {'content': str},               # 发送的消息
+    7: {
         'prompt': str
     },                   # 当服务器第一次发送时，指是否可以投票，当第二次发送时，指投票是否有效
-    -6: {
+    -7: {
         'vote': bool,                   # 是否投票
         'candidate': int                # 投票候选人
     },
-    7: {}
+    8: {}
 }

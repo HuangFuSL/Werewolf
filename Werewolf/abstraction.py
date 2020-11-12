@@ -2,7 +2,7 @@ import socket
 import abc
 from time import sleep
 from threading import Thread
-from typing import Optional, List
+from typing import Optional, List, Tuple
 
 from .WP.api import ChunckedData, ReceiveThread, ReceiveTimeoutError
 
@@ -140,7 +140,7 @@ class Person():
         ret['destPort'] = self.client[1]
         return ret
 
-    def _startListening(self, timeout=0):
+    def _startListening(self, timeout=0) -> ReceiveThread:
         """
         Listen to the client for a specified time.
 
@@ -154,13 +154,16 @@ class Person():
         """
         recevingThread = ReceiveThread(self.recv, timeout)
         recevingThread.start()
-        recevingThread.join()
-        try:
-            return recevingThread.getResult()
-        except ReceiveTimeoutError as e:
-            return None
+        return recevingThread
 
-    def vote(self, timeout: float = _default_timeout):
+    def inform(self, content: str):
+        packet = self._getBasePacket()
+        packet['content'] = content
+        packetSend = ChunckedData(4, **packet)
+        sendingThread = Thread(target=packetSend.send, args=(self.socket, ))
+        sendingThread.start()
+
+    def vote(self, timeout: float = _default_timeout) -> ReceiveThread:
         """
         Send a package to a player to vote for the exiled.
 
@@ -179,7 +182,7 @@ class Person():
         sendingThread.start()
         return self._startListening(timeout=timeout)
 
-    def joinElection(self, timeout: float = _default_timeout):
+    def joinElection(self, timeout: float = _default_timeout) -> ReceiveThread:
         """
         Send a package to a player to join the police election.
 
@@ -192,7 +195,7 @@ class Person():
             ChunckedData, the data received
         """
         packet = self._getBasePacket()
-        packet['format'] = bool
+        packet['format'] = 'bool'
         packet['prompt'] = 'Do you want to be the policeman?\nYou have %f seconds to decide.' % (
             timeout, )
         packet['timeout'] = timeout
@@ -201,7 +204,7 @@ class Person():
         sendingThread.start()
         return self._startListening(timeout=timeout)
 
-    def voteForPolice(self, timeout: float = _default_timeout):
+    def voteForPolice(self, timeout: float = _default_timeout) -> Optional[ReceiveThread]:
         """
         Send a package to a player to vote for the police.
 
@@ -238,7 +241,7 @@ class Person():
         """
         self.police = val
 
-    def speak(self, timeout: float = _default_timeout):
+    def speak(self, timeout: float = _default_timeout) -> ReceiveThread:
         """
         Send a package to a player to talk about the situation before the vote.
 
@@ -357,7 +360,7 @@ class Wolf(Person):
         """
         self.peerList.remove(peer)
 
-    def kill(self, timeout: float = _default_timeout):
+    def kill(self, timeout: float = _default_timeout) -> Optional[ReceiveThread]:
         """
         Wolves communicate with each other and specifying the victim
 
@@ -381,15 +384,19 @@ class Wolf(Person):
         timer.setDaemon(True)
         timer.start()
         while not timer.getStatus():
-            dataRecv = self._startListening(timeout)
+            recv: ReceiveThread = self._startListening(timeout)
+            recv.join()
+            dataRecv: Optional[ChunckedData] = recv.getResult()
             if dataRecv is None or dataRecv.content['type'] == -3:
-                return dataRecv
+                return recv
             elif dataRecv.content['type'] == 5:
                 dataRecv.content.pop('type')
-                packetSend = ChunckedData(5, **dataRecv)
-                sendingThreads = [Thread(target=packetSend.send, args=(
-                    _.socket, )) for _ in self.peerList]
-                for thread in sendingThreads:
+                for peer in self.peerList:
+                    dataRecv.content['srcAddr'], dataRecv.content['srcPort'] = *peer.server
+                    dataRecv.content['destAddr'], dataRecv.content['destPort'] = *peer.client
+                    packetSend = ChunckedData(5, **dataRecv.content)
+                    thread = Thread(target=packetSend.send,
+                                    args=(peer.socket, ))
                     thread.start()
         return None
 
@@ -421,7 +428,7 @@ class SkilledPerson(Person):
         """
         self.used += increment
 
-    def skill(self, prompt: str = "", timeout: float = _default_timeout, format=int):
+    def skill(self, prompt: str = "", timeout: float = _default_timeout, format=int) -> ReceiveThread:
         """
         Ask the player whether to use the skill
 

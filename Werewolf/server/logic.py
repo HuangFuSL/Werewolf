@@ -4,6 +4,7 @@ from ..WP import ChunckedData, _recv
 from threading import Thread
 from .util import *
 from typing import Tuple
+from itertools import groupby
 
 
 class Game:
@@ -54,13 +55,18 @@ class Game:
         self.playerCount: int = playerCount
         self.activePlayer: dict = {}
         self.listeningAddr: Tuple[str, int] = (ip, port)
-        self.ports: list = list(range(port + 1, port + playerCount + 2))
+        self.ports: List[int] = list(range(port + 1, port + playerCount + 2))
         self.running: bool = False
         self.identityList: list = []
         self.listener: IncomingConnection = IncomingConnection(
             self.listeningAddr, self)
         # Further initialization
         self.listener.setName("Incoming connection receiver")
+
+        # Game parameters
+        self.day: int = 0
+        self.night: int = 0
+        self.police = None
         # Verbose
         print("Server port: ", ", ".join([str(_) for _ in self.ports]))
 
@@ -133,16 +139,111 @@ class Game:
         else:
             return -1
 
+    def broadcast(self, srcPlayer, content: str):
+        for player in self.activePlayer:
+            if player == srcPlayer:
+                continue
+            player.broadcast(content)
+
+    def preDay(self):
+        """
+        Implements the game logic before day. Workflow:
+
+        - Elect for police (only the first day)
+        - The candidate talks in sequence (only the first day)
+          - The candidate could not quit the election, which is different from the offline version.
+        - Vote for police (only the first day)
+          - If a wolf explodes in the election period, the server announces the victim and switch to night immediately. The vote is delayed to the next day. Explosion of another wolf at this time will make the police does not exist.
+          - If there are two or more candidates get the same vote, they are required to talk in sequence again. If two or more candidates get the same vote once again, the police does not exist in the game.
+
+        ### Parameter
+
+        None
+
+        ### Return
+
+        The police elected. If a wolf explodes, returns None.
+        """
+        # Send for election
+        electionCandidate = [(player, player.joinElection())
+                             for player in self.activePlayer]
+        for _, thread in electionCandidate:
+            thread.join()
+        candidate: list = []
+        for _, __ in electionCandidate:
+            if __.getResult() is not None and __.getResult().content['action']:
+                candidate.append(_)
+        current: ReceiveThread
+        # Candidate talk in sequence
+        for player in candidate:
+            current = player.speak()
+            current.join()
+            self.broadcast(player, current.getResult().content['content'])
+        # Ask for vote
+        voteThread: List[ReceiveThread] = []
+        for player in self.activePlayer:
+            if player in candidate:
+                continue  # Candidate cannot vote
+            voteThread.append(player.voteForPolice)
+        for thread in voteThread:
+            thread.join()
+        # Get the result
+        vote: list = []
+        for thread in voteThread:
+            if thread.getResult() is None:
+                continue
+            if thread.getResult().content['vote']:
+                vote.append(thread.getResult().content['candidate'])
+        # Count the vote
+        voteList: dict = {i: len(list(j)) for i, j in groupby(sorted(vote))}
+        result, max = [], 0
+        for i in voteList:
+            if voteList[i] > max:
+                result.clear()
+            if voteList[i] >= max:
+                result.append(i)
+        if (len(result) == 1):
+            self.broadcast(None, "The police is player %d" % (result[0], ))
+            self.police = self.activePlayer[result[0]]
+            return None
+        else:
+            # ANCHOR: Re-elect for the police
+            pass
+
     def dayTime(self):
         """
-        TODO: game logic in daytime
+        Implements the game logic in daytime. Workflow:
+        - Announce the victim
+          - If the king of werewolves or the hunter is killed by the wolves, ask them
+          - If the police exists - randomly choose a side from the police
+          - If the police does not exist - randomly choose a side from the victim
+          - If no or two players died at night - randomly choose a side from the police (if exist)
+        - The player talks in sequence
+          - If a wolf explodes, the game switch to the night at once after the wolf talks.
+        - Vote for the victim
+          - If there are same vote, players with the same vote talk again and vote again. If the same situation appears again, there will be no victim in day.
+        - Announce the victim
+          - If the victim is an idiot not voted out before, it can escape from death. But the idiot can no longer vote.
         """
+        # ANCHOR: Implement the game logic in daytime
         pass
 
     def nightTime(self):
         """
-        TODO: game logic in nightime
+        Implements the game logic at night. Workflow:
+
+        - Wolves wake up to kill a person. The server should inform a player his peers.
+        - The witch wakes up to kill a person or save a person
+          - After the witch has saved a person, it would no longer knows the victim at night
+          - The witch can only use a bottle of potion at night.
+          - The witch can only save herself in the first night.
+        - The predictor wakes up and check the identity of another player.
+        - The hunter wakes up. The server inform the skill status. (If not killed by the witch)
+        - The guard wakes up, choose to guard a player at night.
+          - The guard cannot guard a player in two consecutive nights.
         """
+        # ANCHOR: Implement the game logic at night
+        pass
 
     def setIdentityList(self, **kwargs):
         """
@@ -193,15 +294,16 @@ class Game:
         None
         """
         assert self.running == False
-        assert data.content["type"] == 2  # The packet type must match
+        assert data.content["type"] == 1  # The packet type must match
         # `identityList` must be initialized
         assert len(self.identityList) != 0
         # Read the content of the packet
-        server: Tuple[str, int] = data.getAddr("destination")
+        # Verify the seat is available
         client: Tuple[str, int] = data.getAddr("source")
         id: int = data.content["chosenSeat"]
-        # Verify the seat is available
         if id in range(1, self.playerCount + 1) and id not in self.activePlayer.keys():
+            server: Tuple[str, int] = (data.getAddr(
+                "destination")[0], self.ports[id])
             self.activePlayer[id] = self.identityList.pop()(
                 id=id, server=server, client=client
             )
@@ -209,6 +311,8 @@ class Game:
             id = randint(1, self.playerCount)
             while id in self.activate.keys():
                 id = randint(1, self.playerCount)
+            server: Tuple[str, int] = (data.getAddr(
+                "destination")[0], self.ports[id])
             self.activePlayer[id] = self.identityList.pop()(
                 id=id, server=server, client=client
             )
@@ -219,7 +323,7 @@ class Game:
         packet["chosenSeat"] = id
         packet["identity"] = identity
         sendingThread: Thread = Thread(
-            target=ChunckedData(-2, **
+            target=ChunckedData(-1, **
                                 packet).send, args=(self.activePlayer[id].socket,)
         )
         sendingThread.start()

@@ -62,6 +62,16 @@ class Player():
                 k += 1
                 IoThread(k, reqPacket)
         except KeyboardInterrupt:
+            # 编号：
+            #   村民：0
+            #   狼人：-1
+            #   狼王：-3
+            #   白狼王：-2
+            #   预言家：1
+            #   女巫：2
+            #   猎人：3
+            #   守卫：4
+            #   白痴：5
             if player.role != 1:  # 我这里假定1是狼人了，没找到各角色对应的序号，以后再改叭
                 pass
             else:
