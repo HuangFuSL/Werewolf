@@ -286,8 +286,6 @@ class Game:
         victimByWolf: int = 0
         victimByWitch: int = 0
         predictorTarget: int = 0
-        witchTarget: int = 0
-        witchType: bool
         guardTarget: int = 0
         hunterStatus: bool = True
 

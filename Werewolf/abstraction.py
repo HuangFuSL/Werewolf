@@ -373,7 +373,7 @@ class Wolf(Person):
             ChunckedData, the data received
         """
         packet = self._getBasePacket()
-        packet['format'] = int
+        packet['format'] = "int"
         packet['prompt'] = "Please select a person to kill.\nYou have %f seconds to decide with your partner" % (
             timeout, )
         packet['timeout'] = timeout
@@ -533,7 +533,7 @@ class Witch(SkilledPerson):
                 timeout, )
         else:
             return None
-        return SkilledPerson.skill(self, prompt, timeout, "(int, str)")
+        return SkilledPerson.skill(self, prompt, timeout, "int")
 
 
 class Hunter(SkilledPerson):
