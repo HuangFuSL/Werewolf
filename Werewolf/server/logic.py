@@ -68,8 +68,9 @@ class Game:
         self.night: int = 0
         self.police = None
 
-        self.victim: int = 0
-        self.savedLastNight: int = 0
+        self.victim: List[int] = []
+        self.guardedLastNight: int = 0
+        self.hunterStatus: bool = True
         # Verbose
         print("Server port: ", ", ".join([str(_) for _ in self.ports]))
 
@@ -275,11 +276,11 @@ class Game:
           - The witch can only use a bottle of potion at night.
           - The witch can only save herself in the first night.
         - The predictor wakes up and check the identity of another player.
-        - The hunter wakes up. The server inform the skill status. (If not killed by the witch)
         - The guard wakes up, choose to guard a player at night.
           - The guard cannot guard a player in two consecutive nights.
+        - The hunter wakes up. The server inform the skill status. (If not killed by the witch)
         """
-        # ANCHOR: Implement the game logic at night
+        # SECTION: Implement the game logic at night
 
         # Parameters:
         victimByWolf: int = 0
@@ -290,8 +291,11 @@ class Game:
         guardTarget: int = 0
         hunterStatus: bool = True
 
-        # Wolves wake up
+        # ANCHOR: Wolves wake up
+        # Vote for a player to kill
+
         wolfThread: List[ReceiveThread] = []
+
         for player in self.activePlayer:
             if isinstance(player, (Wolf, KingOfWerewolves, WhiteWerewolf)):
                 ret: Optional[ReceiveThread] = player.kill()
@@ -313,6 +317,7 @@ class Game:
 
             result: List[int] = getVotingResult(vote)
 
+            # If there are more than 1 victim, randomly choose one
             shuffle(result)
             victimByWolf = result[0]
 
@@ -321,7 +326,9 @@ class Game:
             del result
         del wolfThread
 
-        # Predictor wake up
+        # ANCHOR: Predictor wake up
+        # The predictor ask for a player's identity
+
         predictorThread: Optional[ReceiveThread] = None
         predictor: Optional[Predictor] = None
 
@@ -348,7 +355,9 @@ class Game:
             del packetContent
         del predictorThread
 
-        # Witch wake up
+        # ANCHOR: Witch wake up
+        # Witch can save or kill a person
+
         witchThread: Optional[ReceiveThread] = None
         witch: Optional[Witch] = None
 
@@ -357,19 +366,29 @@ class Game:
                 witch = player
                 witchThread = player.skill(killed=victimByWolf)
         if witch is not None and witchThread is not None:
+            """
+            Got the response
+            """
             packetContent: dict = witchThread.getResult().content
             if packetContent['action']:
-                if packetContent['target'] == 0 and witch.used % 2 == 0:
-                    victimByWolf *= -1  # Wait for guard
-                    witch.used += 1
-                elif packetContent['target'] in self.activePlayer and witch.used < 2:
-                    victimByWitch = packetContent['target']
-                    witch.used += 2
-
+                """
+                If the witch takes the action
+                """
+                if not isinstance(self.activePlayer[packetContent['target']], Witch) or self.night == 0:
+                    """
+                    The witch cannot save herself after the first night.
+                    """
+                    if packetContent['target'] == 0 and witch.used % 2 == 0:
+                        victimByWolf *= -1  # Wait for guard
+                        witch.used += 1
+                    elif packetContent['target'] in self.activePlayer and witch.used < 2:
+                        victimByWitch = packetContent['target']
+                        witch.used += 2
             del packetContent
         del witchThread
 
-        # Guard wake up
+        # ANCHOR: Guard wake up
+        # Guard protects a player, prevent him from dying from wolves.
 
         guardThread: Optional[ReceiveThread] = None
         guard: Optional[Guard] = None
@@ -383,10 +402,36 @@ class Game:
             if packetContent['action']:
                 if packetContent['target'] in self.activePlayer:
                     guardTarget = packetContent['target']
-                    victimByWolf *= -1 if guardTarget + victimByWolf == 0 else 1
+                    # Cannot save the same player in 2 days.
+                    if (guardTarget != self.guardedLastNight):
+                        victimByWolf *= -1 if guardTarget + victimByWolf == 0 else 1
 
             del packetContent
         del guardThread
+
+        # ANCHOR: Hunter wake up
+        # The server checks the usablity of the skill
+
+        self.hunterStatus = not isinstance(
+            self.activePlayer[victimByWitch], Hunter
+        )
+
+        # ANCHOR: Return the value
+        self.victim.clear()
+        if victimByWitch:
+            self.victim.append(victimByWitch)
+        if victimByWolf:
+            self.victim.append(victimByWolf)
+        shuffle(self.victim)
+
+        if self.guardedLastNight != guardTarget:
+            self.guardedLastNight = guardTarget
+        else:
+            self.guardedLastNight = 0
+
+        self.night += 1
+
+        # !SECTION
 
     def setIdentityList(self, **kwargs):
         """
