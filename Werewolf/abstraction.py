@@ -110,16 +110,16 @@ class Person():
             Person, the objcet created.
         """
         # AF_INET：使用TCP/IP-IPv4协议簇；SOCK_STREAM：使用TCP流
-        self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM, 0)
-        self.recv = socket.socket(socket.AF_INET, socket.SOCK_STREAM, 0)
+        #self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM, 0)
+        #self.recv = socket.socket(socket.AF_INET, socket.SOCK_STREAM, 0)
         self.client = client
         self.server = server
         self.id = id
         self.police = False  # police的值由服务器进行分配，在__init__()方法中被初始化为False
         self.innocent = True  # 如果某个客户端是狼人，则innocent的值为False；否则为True
         self.alive = True
-        self.recv.bind(server)
-        self.recv.listen(1)
+        #self.recv.bind(server)
+        #self.recv.listen(1)
 
     def _getBasePacket(self) -> dict:
         """
@@ -173,7 +173,7 @@ class Person():
 
         Returns:
 
-            ChunckedData, the data received
+            ReceiveThread, the thread receiving from the client
         """
         packet = self._getBasePacket()
         packet['prompt'] = "Please vote for the people to be banished:"
@@ -192,7 +192,7 @@ class Person():
 
         Returns:
 
-            ChunckedData, the data received
+            ReceiveThread, the thread receiving from the client
         """
         packet = self._getBasePacket()
         packet['format'] = 'bool'
@@ -214,11 +214,11 @@ class Person():
 
         Returns:
 
-            ChunckedData, the data received
+            receiveThread, the thread receiving from the client
         """
-        if not self.police:
+        if self.police:
             packet = self._getBasePacket()
-            packet['prompt'] = "Please vote for the police:"
+            packet['prompt'] = "Please choose the sequence: True for clockwise and False for anti-clockwise"
             packetSend = ChunckedData(7, **packet)
             sendingThread = Thread(
                 target=packetSend.send, args=(self.socket, ))
@@ -241,6 +241,29 @@ class Person():
         """
         self.police = val
 
+    def policeSetseq(self, timeout: float = _default_timeout) -> Optional[ReceiveThread]:
+        """
+        Send a package to the police to choose the sequence.
+
+        Parameters:
+
+            timeout: float, time to wait for the client
+
+        Returns:
+
+            receiveThread, the thread receiving from the client
+        """
+        if not self.police:
+            packet = self._getBasePacket()
+            packet['prompt'] = "Please vote for the police:"
+            packetSend = ChunckedData(7, **packet)
+            sendingThread = Thread(
+                target=packetSend.send, args=(self.socket, ))
+            sendingThread.start()
+            return self._startListening(timeout=timeout)
+        else:
+            return None
+
     def speak(self, timeout: float = _default_timeout) -> ReceiveThread:
         """
         Send a package to a player to talk about the situation before the vote.
@@ -251,7 +274,7 @@ class Person():
 
         Returns:
 
-            ChunckedData, the data received
+            ReceiveThread, the thread receiving from the client
         """
         packet = self._getBasePacket()
         packet['timeLimit'] = timeout
@@ -370,7 +393,7 @@ class Wolf(Person):
 
         Returns:
 
-            ChunckedData, the data received
+            receiveThread, the thread receiving from the client
         """
         packet = self._getBasePacket()
         packet['format'] = "int"
@@ -441,7 +464,7 @@ class SkilledPerson(Person):
 
         Returns:
 
-            ChunckedData, the data received
+            receiveThread, the thread receiving from the client
         """
         packet = self._getBasePacket()
         packet['format'] = format

@@ -11,18 +11,19 @@ class Game:
     """
     # Game - the main class for game logic
 
-    class Game implements the communication process and the whole game process. Provides interfaces for custimizing a game.
+    class Game implements the communication process and the whole game process. Provides interfaces for customizing a game.
 
     ## Attributes
 
     - playerCount : `int`,                the number of the players
+    - allPlayer   : `dict`,               the number and the identity of all player.
     - activePlayer: `dict`,               the number and the identity of remaining player.
-    - Key         : `int`,                the identification number of each player
+    - Key         : `int`,                the identification number of each player (or you can say seat number)
     - Value       : `Any`,                the identity of each player, should be a class in `abstraction.py`
     - ports       : `list`,               the ports available for communication with the player
     - running     : `bool`,               the status of the game, can set to `True` when the `identityList` is empty and the length of `activePlayer` equals with `playerCount`
     - identityList: `list`,               used when allocating the user identity
-    - listener     : `IncomingConnection`, the thread for receiving handshakes
+    - listener    : `IncomingConnection`, the thread for receiving handshakes
 
     ## Methods
 
@@ -30,10 +31,11 @@ class Game:
     - `startListening()`: Starts listening for clients
     - `activate()`: Set the `running` attribute to `True` to prevent further modification
     - `deactivate()`: Set the `running` attribute to `False` to prevent further modification
-    - `checkStatus()`: Check whether the stopping criterion is triggered
-      - Stopping criterion: either werewolves, villagers, skilled villagers are eliminated
     - `setIdentityList()`: Generate an identity configuration according to the given parameter
     - `addPlayer()`: add a player to the game after receiving a packet
+    - `checkStatus()`: Check whether the stopping criterion is triggered
+      - Stopping criterion: either werewolves, villagers, skilled villagers are all eliminated
+    - ``
     """
 
     def __init__(self, ip: str, port: int, playerCount: int):
@@ -43,7 +45,7 @@ class Game:
         ### Parameter
 
         - ip: `str`, the IP address of the server
-        - port: `int`, the port used for listending to the incoming connection
+        - port: `int`, the port of the server, used for listening to the incoming connection
         - playerCount: `int`, the number of players in a game
 
         ### Return
@@ -53,6 +55,7 @@ class Game:
 
         # Attribute initialization
         self.playerCount: int = playerCount
+        self.allPlayer:dict = {}
         self.activePlayer: dict = {}
         self.listeningAddr: Tuple[str, int] = (ip, port)
         self.ports: List[int] = list(range(port + 1, port + playerCount + 2))
@@ -71,6 +74,7 @@ class Game:
         self.victim: List[int] = []
         self.guardedLastNight: int = 0
         self.hunterStatus: bool = True
+        self.kingofwolfStatus: bool = True
         # Verbose
         print("Server port: ", ", ".join([str(_) for _ in self.ports]))
 
@@ -124,9 +128,9 @@ class Game:
 
         An `int` integer, value falls in `-1`, `0` and `1`
 
-        - `-1`: The game stops and the werewolf wins - either villagers or skilled villagers are eliminated
+        - `-1`: The game stops and the werewoles win - either villagers or skilled villagers are eliminated
         - `0`: The game continues
-        - `1`: The game stops and the villager wins - the wolves are eliminated
+        - `1`: The game stops and the villagers win - the wolves are eliminated
         """
         numVillager, numSkilled, numWolf = 0, 0, 0
         for player in self.activePlayer:
@@ -136,12 +140,13 @@ class Game:
                 numWolf += 1
             else:
                 numSkilled += 1
-        if numSkilled and numVillager and numWolf:
+        if numSkilled > 0 and numVillager > 0 and numWolf > 0:
             return 0
         elif numWolf == 0:
             return 1
         else:
             return -1
+
 
     def broadcast(self, srcPlayer, content: str):
         """
@@ -156,12 +161,93 @@ class Game:
 
         None
         """
-        for player in self.activePlayer:
+        for id in self.activePlayer:
+            player = self.activePlayer[id]
             if player == srcPlayer:
                 continue
-            player.broadcast(content)
+            player.inform(content)
 
-    def preDay(self):
+        # !SECTION
+
+    def setIdentityList(self, **kwargs):
+        """
+        Initialize the identity configuration.
+
+        ### Parameter
+
+        - Villager      : `int`, REQUIRED, the number of villagers
+        - Wolf          : `int`, REQUIRED, the number of wolves
+        - KingofWerewolf: `int`, optional, the number of kings of werewolves
+        - WhiteWerewolf : `int`, optional, the number of white werewolves
+        - Predictor     : `int`, optional, the number of predictors
+        - Witch         : `int`, optional, the number of witches
+        - Hunter        : `int`, optional, the number of hunters
+        - Guard         : `int`, optional, the number of guards
+        - Idiot         : `int`, optional, the number of idiots
+
+        The value of `Villager` and `Wolf` parameter should be **at least** 1, and values of the other parameters should be **at most** 1.
+
+        ### Return
+
+        None
+        """
+        self.identityList = []
+        assert "Villager" in kwargs, "The `Villager` parameter is required"
+        assert "Wolf" in kwargs, "The `Wolf` parameter is required"
+        for identity in kwargs:
+            assert identity in availableIdentity
+            if identity in uniqueIdentity:
+                assert kwargs[identity] <= 1, "There should be at most 1 " + identity
+            else:
+                assert kwargs[identity] >= 1, "There should be at least 1 " + identity
+            for i in range(kwargs[identity]):
+                # eval(identity) returns a class
+                self.identityList.append(eval(identity))
+        shuffle(self.identityList)
+
+    def addPlayer(self, data: ChunckedData):
+        """
+        The server add a player to game after receiving a choose seat request.
+
+        ### Parameter
+
+        - data: data packet received.
+
+        ### Return
+
+        None
+        """
+        assert self.running is False
+        assert data.content["type"] == 1  # The packet type must match
+        # `identityList` must be initialized
+        assert len(self.identityList) != 0
+        # Read the content of the packet
+        # Verify the seat is available
+        client: Tuple[str, int] = data.getAddr("source")
+        id: int = data.content["chosenSeat"]
+        # Randomly allocate seat when the seat chosen is already taken
+        if id not in range(1, self.playerCount + 1) or id in self.activePlayer.keys():
+            id = randint(1, self.playerCount)
+            while id in self.activate.keys():
+                id = randint(1, self.playerCount)
+        server: Tuple[str, int] = (data.getAddr(
+            "destination")[0], self.ports[id])
+        newplayer = self.identityList.pop()(id=id, server=server, client=client)
+        self.activePlayer[id] = newplayer
+        self.allPlayer[id] = newplayer
+        # Send response
+        identityCode: int = getIdentityCode(self.activePlayer[id])
+        packet: dict = getBasePacket(server, client)
+        packet["success"] = True
+        packet["chosenSeat"] = id
+        packet["identityCode"] = identityCode
+        sendingThread: Thread = Thread(
+            target=ChunckedData(-1, **
+                                packet).send, args=(self.activePlayer[id].socket,)
+        )
+        sendingThread.start()
+
+    def electPolice(self):
         """
         Implements the game logic before day. Workflow:
 
@@ -184,16 +270,12 @@ class Game:
         # Ask for election
         electionCandidate = [(player, player.joinElection())
                              for player in self.activePlayer]
-        for _, thread in electionCandidate:
-            thread.join()
+        for player, recthread in electionCandidate:
+            recthread.join()
         candidate: list = []
-        for _, __ in electionCandidate:
-            """
-            _ : player
-            __: the corresponding ReceiveThread object
-            """
-            if __.getResult() is not None and __.getResult().content['action']:
-                candidate.append(_)
+        for player, recthread in electionCandidate:
+            if recthread.getResult() is not None and recthread.getResult().content['action']:
+                candidate.append(player)
         current: ReceiveThread
 
         # Candidate talk in sequence
@@ -248,9 +330,34 @@ class Game:
         self.police = None
         return None
 
-    def dayTime(self):
+    def victimSkill(self):
+        for id in self.victim:
+            victim = self.allPlayer[id]
+            victim.onDead(True if self.night == 1 or self.day == self.night else False, default_timeout())
+            if isinstance(victim, Hunter) or isinstance(victim, KingOfWerewolves):
+                if (self.hunterStatus and isinstance(victim, Hunter)) \
+                        or (self.kingofwolfStatus and isinstance(victim, KingOfWerewolves)):
+                    gunThread = victim.skill()
+                    gunThread.join()
+                    packetContent: dict = gunThread.getResult().content
+                    if packetContent['action'] and packetContent['target'] in self.activePlayer:
+                        self.broadcast(None, "the player %d has been killed by the player %d"
+                                       % (packetContent['target'], id))
+                        status = self.checkStatus()
+                        if status != 0:
+                            return status
+                        victim.onDead(True, default_timeout())
+                    else:
+                        victim.inform("you didn't choose the target or you choose the wrong number!")
+                else:
+                    victim.inform("you can't open the gun!")
+        # reset the status of the gun
+        self.hunterStatus = True
+        self.kingofwolfStatus = True
+
+    def dayTime(self) -> int:
         """
-        Implements the game logic in daytime. Workflow:
+        # Implements the game logic in daytime. Workflow:
         - Announce the victim
           - If the king of werewolves or the hunter is killed by the wolves, ask them
           - If the police exists - randomly choose a side from the police
@@ -260,11 +367,145 @@ class Game:
           - If a wolf explodes, the game switch to the night at once after the wolf talks.
         - Vote for the victim
           - If there are same vote, players with the same vote talk again and vote again. If the same situation appears again, there will be no victim in day.
-        - Announce the victim
-          - If the victim is an idiot not voted out before, it can escape from death. But the idiot can no longer vote.
+        - Announce the exile
+          - If the exile is an idiot not voted out before, it can escape from death. But the idiot can no longer vote.
+
+        ### Return
+
+        An `int` integer, value falls in `-1`, `0` and `1`
+
+        - `-1`: The game stops and the werewoles win - either villagers or skilled villagers are eliminated
+        - `0`: The game continues
+        - `1`: The game stops and the villagers win - the wolves are eliminated
         """
         # ANCHOR: Implement the game logic in daytime
-        pass
+        # announce the victim and check the game status
+        if len(self.victim) == 0:
+            self.broadcast(None, "last night is safe")
+        else:
+            self.broadcast(None, "the victim last night is player: %s" % ", ".join(str(s) for s in self.victim))
+        status = self.checkStatus()
+        if status != 0:
+            return status
+        # ask if the victim want to use the skill
+        if len(self.victim) > 0:
+            self.victimSkill()
+
+        # ask the police (if exists) to choose the talking sequence
+        talkSequence: list[int] = []
+        isClockwise: bool = True
+        if len(self.victim) == 0:
+            i = 0
+            for id in self.activePlayer:
+                if i == 0:
+                    startpoint = id
+                if id > self.victim.pop():
+                    startpoint = id
+                i += 1
+        else:
+            startpoint = self.victim[0]
+
+        if self.police is not None:
+            police = self.activePlayer[self.police]
+            policeThread = police.policeSetseq()
+            policeThread.join()
+            packetContent: dict = policeThread.getResult().content
+            if packetContent['clockwise'] == False:
+                isClockwise = False
+
+        talkSequence = self.setSeq(startpoint, isClockwise)
+
+        # active player talk in sequence
+        for i in range(2):
+            """
+            Vote for the exile
+
+            Loop variable: i - only a counter
+            """
+            for id in talkSequence:
+                player = self.activePlayer['%d' % id]
+                current = player.speak()
+                current.join()
+                self.broadcast(player, current.getResult().content['content'])
+
+            # Ask for vote
+            voteThread: List[ReceiveThread] = []
+            for id in self.activePlayer and id != self.police:
+                voteThread.append(self.activePlayer[id].vote())
+            for thread in voteThread:
+                thread.join()
+            # police vote is special case
+            policevote = None
+            if self.police is not None:
+                policevoteThread = self.activePlayer[self.police].vote()
+                policevoteThread.join()
+                packetContent = policevoteThread.getTesult().content
+                if packetContent['vote'] and packetContent['candidate'] in self.activePlayer:
+                    policevote = packetContent['candidate']
+
+            # Get the result and count the vote
+            vote: list = []
+            packetContent: dict = {}
+            for thread in voteThread:
+                if thread.getResult() is None:
+                    continue
+                packetContent = thread.getResult().content
+                if packetContent['vote'] and packetContent['candidate'] in self.activePlayer:
+                    vote.append(packetContent['candidate'])
+            result: List[int] = getVotingResult(vote, policevote)
+
+            del voteThread
+            del vote
+            del packetContent
+
+            exile = []
+            if (len(result) == 1):
+                self.broadcast(None, "The exile is player %d" % (result[0],))
+                exile = self.activePlayer[result[0]]
+                return None
+            else:
+                self.broadcast(
+                    None,
+                    "Another election is needed, exile candidates are %s" % ", ".join(
+                        [str(_) for _ in result]
+                    )
+                )
+                exile.clear()
+                exile = [self.activePlayer[_] for _ in result]
+
+        # announce the exile and check the game status
+        if len(exile) == 0:
+            self.broadcast(None, "no one exile!")
+        else:
+            self.broadcast(None, "the exile player is: %s" % ", ".join(str(s) for s in self.victim))
+        status = self.checkStatus()
+        if status != 0:
+            return status
+        # ask if the victim want to use the skill
+        if len(self.victim) > 0:
+            self.victimSkill()
+
+
+    def setSeq(self, startpoint: int, clockwise: bool):
+        """
+
+        - startpoint: the person id to start with
+        - clockwise: True means clockwise, False means anti-clockwise
+
+        - return: seq: list[int]
+        """
+        seq = []
+        tempActive = []
+        for id in self.activePlayer:
+            tempActive.append(id)
+        if clockwise == False:
+            tempActive = tempActive.reverse()
+        for i in range(0, len(tempActive)):
+            if i > tempActive.index(startpoint):
+                seq.append(tempActive.pop(i))
+        seq += tempActive
+
+        return seq
 
     def nightTime(self):
         """
@@ -363,6 +604,7 @@ class Game:
             if isinstance(player, Witch):
                 witch = player
                 witchThread = player.skill(killed=victimByWolf)
+                # witchThread.join()
         if witch is not None and witchThread is not None:
             """
             Got the response
@@ -377,7 +619,7 @@ class Game:
                     The witch cannot save herself after the first night.
                     """
                     if packetContent['target'] == 0 and witch.used % 2 == 0:
-                        victimByWolf *= -1  # Wait for guard
+                        victimByWolf *= -1 # wait for guard
                         witch.used += 1
                     elif packetContent['target'] in self.activePlayer and witch.used < 2:
                         victimByWitch = packetContent['target']
@@ -403,6 +645,7 @@ class Game:
                     # Cannot save the same player in 2 days.
                     if (guardTarget != self.guardedLastNight):
                         victimByWolf *= -1 if guardTarget + victimByWolf == 0 else 1
+                        # the situation when guard and save the same person
 
             del packetContent
         del guardThread
@@ -413,14 +656,19 @@ class Game:
         self.hunterStatus = not isinstance(
             self.activePlayer[victimByWitch], Hunter
         )
+        self.kingofwolfStatus = not isinstance(
+            self.activePlayer[victimByWitch], KingOfWerewolves
+        )
 
         # ANCHOR: Return the value
         self.victim.clear()
         if victimByWitch:
             self.victim.append(victimByWitch)
-        if victimByWolf:
+        if victimByWolf > 0:
             self.victim.append(victimByWolf)
         shuffle(self.victim)
+        for id in self.victim:
+            self.activePlayer.pop(id)
 
         if self.guardedLastNight != guardTarget:
             self.guardedLastNight = guardTarget
@@ -429,90 +677,9 @@ class Game:
 
         self.night += 1
 
-        # !SECTION
 
-    def setIdentityList(self, **kwargs):
-        """
-        Initialize the identity configuration.
 
-        ### Parameter
 
-        - Villager      : `int`, REQUIRED, the number of villagers
-        - Wolf          : `int`, REQUIRED, the number of wolves
-        - KingofWerewolf: `int`, optional, the number of kings of werewolves
-        - WhiteWerewolf : `int`, optional, the number of white werewolves
-        - Predictor     : `int`, optional, the number of predictors
-        - Witch         : `int`, optional, the number of witches
-        - Hunter        : `int`, optional, the number of hunters
-        - Guard         : `int`, optional, the number of guards
-        - Idiot         : `int`, optional, the number of idiots
-
-        The value of `Villager` and `Wolf` parameter should be **at least** 1, and values of the other parameters should be **at most** 1.
-
-        ### Return
-
-        None
-        """
-        self.identityList = []
-        assert "Villager" in kwargs, "The `Villager` parameter is required"
-        assert "Wolf" in kwargs, "The `Wolf` parameter is required"
-        for identity in kwargs:
-            assert identity in availableIdentity
-            if identity in uniqueIdentity:
-                assert kwargs[identity] <= 1, "There should be at most 1 " + identity
-            else:
-                assert kwargs[identity] >= 1, "There should be at least 1 " + identity
-            for i in range(kwargs[identity]):
-                # eval(identity) returns a class
-                self.identityList.append(eval(identity))
-        shuffle(self.identityList)
-
-    def addPlayer(self, data: ChunckedData):
-        """
-        The server add a player to game after receiving a choose seat request.
-
-        ### Parameter
-
-        - data: data packet received.
-
-        ### Return
-
-        None
-        """
-        assert self.running == False
-        assert data.content["type"] == 1  # The packet type must match
-        # `identityList` must be initialized
-        assert len(self.identityList) != 0
-        # Read the content of the packet
-        # Verify the seat is available
-        client: Tuple[str, int] = data.getAddr("source")
-        id: int = data.content["chosenSeat"]
-        if id in range(1, self.playerCount + 1) and id not in self.activePlayer.keys():
-            server: Tuple[str, int] = (data.getAddr(
-                "destination")[0], self.ports[id])
-            self.activePlayer[id] = self.identityList.pop()(
-                id=id, server=server, client=client
-            )
-        else:  # Randomly allocate seat when the seat chosen is already taken
-            id = randint(1, self.playerCount)
-            while id in self.activate.keys():
-                id = randint(1, self.playerCount)
-            server: Tuple[str, int] = (data.getAddr(
-                "destination")[0], self.ports[id])
-            self.activePlayer[id] = self.identityList.pop()(
-                id=id, server=server, client=client
-            )
-        # Send response
-        identity: int = getIdentityCode(self.activePlayer[id])
-        packet: dict = getBasePacket(server, client)
-        packet["success"] = True
-        packet["chosenSeat"] = id
-        packet["identity"] = identity
-        sendingThread: Thread = Thread(
-            target=ChunckedData(-1, **
-                                packet).send, args=(self.activePlayer[id].socket,)
-        )
-        sendingThread.start()
 
 
 class IncomingConnection(Thread):
