@@ -68,7 +68,7 @@ class IoThread(Thread):
             target = input()
             ret = ChunckedData(-3,target = target)
 
-      elif(type == 4):
+        elif(type == 4):
             """
             4是服务器公布的信息，-4 response
             不太确定这个packet中的parameter是啥意思，就先打出来了
