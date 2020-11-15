@@ -40,8 +40,7 @@ class IoThread(Thread):
                 print(x, end=' ')
             print("Please enter the number of seat you choose: ")
             chosenSeat = input()
-    
-            return ChunckedData(2,chosenSeat = seatChosed)
+            ret = ChunckedData(2,chosenSeat = seatChosed)
     
         elif(type == -2):
             """
@@ -67,8 +66,7 @@ class IoThread(Thread):
             ReceiveTimeoutError(timeout=ret.content['timeLimit'])
     
             target = input()
-    
-            return ChunckedData(-3,target = target)
+            ret = ChunckedData(-3,target = target)
 
       elif(type == 4):
             """
@@ -78,7 +76,7 @@ class IoThread(Thread):
             print(ret.content['description'])
             print(ret.content['parameter'])
     
-            return ChunckedData(-4, ACK = True)
+            ret = ChunckedData(-4, ACK = True)
     
         elif(type == 5):
             """
@@ -94,7 +92,7 @@ class IoThread(Thread):
             ReceiveTimeoutError(timeout=ret.content['timeLimit'])
             content = input()
 
-            return ChunckedData(-6, content = content)
+            ret = ChunckedData(-6, content = content)
 
         elif(type == 7):
             '''
@@ -107,8 +105,6 @@ class IoThread(Thread):
                 ret = ChunckedData(-7, vote=False, candidate=0)
             else:
                 ret = ChunckedData(-7, vote=True, candidate=candidate)
-    
-            return ret
     
         elif(type == 8):
             pass
