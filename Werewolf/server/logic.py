@@ -55,7 +55,7 @@ class Game:
 
         # Attribute initialization
         self.playerCount: int = playerCount
-        self.allPlayer:dict = {}
+        self.allPlayer: dict = {}
         self.activePlayer: dict = {}
         self.listeningAddr: Tuple[str, int] = (ip, port)
         self.ports: List[int] = list(range(port + 1, port + playerCount + 2))
@@ -146,7 +146,6 @@ class Game:
             return 1
         else:
             return -1
-
 
     def broadcast(self, srcPlayer, content: str):
         """
@@ -333,7 +332,8 @@ class Game:
     def victimSkill(self):
         for id in self.victim:
             victim = self.allPlayer[id]
-            victim.onDead(True if self.night == 1 or self.day == self.night else False, default_timeout())
+            victim.onDead(True if self.night == 1 or self.day ==
+                          self.night else False, default_timeout())
             if isinstance(victim, Hunter) or isinstance(victim, KingOfWerewolves):
                 if (self.hunterStatus and isinstance(victim, Hunter)) \
                         or (self.kingofwolfStatus and isinstance(victim, KingOfWerewolves)):
@@ -343,12 +343,14 @@ class Game:
                     if packetContent['action'] and packetContent['target'] in self.activePlayer:
                         self.broadcast(None, "the player %d has been killed by the player %d"
                                        % (packetContent['target'], id))
+                        # TODO kick the player out
                         status = self.checkStatus()
                         if status != 0:
                             return status
                         victim.onDead(True, default_timeout())
                     else:
-                        victim.inform("you didn't choose the target or you choose the wrong number!")
+                        victim.inform(
+                            "you didn't choose the target or you choose the wrong number!")
                 else:
                     victim.inform("you can't open the gun!")
         # reset the status of the gun
@@ -379,11 +381,16 @@ class Game:
         - `1`: The game stops and the villagers win - the wolves are eliminated
         """
         # ANCHOR: Implement the game logic in daytime
+
+        startpoint: int = 0
+        exile: list = []
+
         # announce the victim and check the game status
         if len(self.victim) == 0:
             self.broadcast(None, "last night is safe")
         else:
-            self.broadcast(None, "the victim last night is player: %s" % ", ".join(str(s) for s in self.victim))
+            self.broadcast(None, "the victim last night is player: %s" %
+                           ", ".join(str(s) for s in self.victim))
         status = self.checkStatus()
         if status != 0:
             return status
@@ -430,8 +437,9 @@ class Game:
 
             # Ask for vote
             voteThread: List[ReceiveThread] = []
-            for id in self.activePlayer and id != self.police:
-                voteThread.append(self.activePlayer[id].vote())
+            for id in self.activePlayer:
+                if id != self.police:
+                    voteThread.append(self.activePlayer[id].vote())
             for thread in voteThread:
                 thread.join()
             # police vote is special case
@@ -444,6 +452,7 @@ class Game:
                     policevote = packetContent['candidate']
 
             # Get the result and count the vote
+            # TODO: IDIOT
             vote: list = []
             packetContent: dict = {}
             for thread in voteThread:
@@ -477,14 +486,14 @@ class Game:
         if len(exile) == 0:
             self.broadcast(None, "no one exile!")
         else:
-            self.broadcast(None, "the exile player is: %s" % ", ".join(str(s) for s in self.victim))
+            self.broadcast(None, "the exile player is: %s" %
+                           ", ".join(str(s) for s in self.victim))
         status = self.checkStatus()
         if status != 0:
             return status
         # ask if the victim want to use the skill
         if len(self.victim) > 0:
             self.victimSkill()
-
 
     def setSeq(self, startpoint: int, clockwise: bool):
         """
@@ -619,7 +628,7 @@ class Game:
                     The witch cannot save herself after the first night.
                     """
                     if packetContent['target'] == 0 and witch.used % 2 == 0:
-                        victimByWolf *= -1 # wait for guard
+                        victimByWolf *= -1  # wait for guard
                         witch.used += 1
                     elif packetContent['target'] in self.activePlayer and witch.used < 2:
                         victimByWitch = packetContent['target']
@@ -676,10 +685,6 @@ class Game:
             self.guardedLastNight = 0
 
         self.night += 1
-
-
-
-
 
 
 class IncomingConnection(Thread):
