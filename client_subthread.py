@@ -17,39 +17,6 @@ class ReceiveTimeoutError(Exception):
     def __str__(self):
         return "Data receive timeout."
 
-def comPack2(seat) -> ChunckedData:
-    """
-    compress the return packet of -1,
-    whose packetType number is 2
-    """
-    ret = ChunckedData(2,chosenSeat = seat)
-    return ret
-
-def comPack_3(target) -> ChunckedData:
-    """
-   compress the return packet of 3,
-   which is -3
-    """
-
-    ret = ChunckedData(-3,target = target)
-    return ret
-
-def comPack_4() -> ChunckedData:
-    ret = ChunckedData(-4, ACK = True)
-    return ret
-
-def comPack_6(content) -> ChunckedData:
-    ret = ChunckedData(-6, content = content)
-    return ret
-
-def comPack_7(candidate) -> ChunckedData:
-    if(candidate.isspace() == True ) :
-        ret = ChunckedData(-7,vote = False, candidate = 0)
-    else :
-        ret = ChunckedData(-7, vote = True, candidate = candidate)
-
-    return ret
-
 def playerResponse(ret):
     type = (int)ret.packetType
 
@@ -63,7 +30,7 @@ def playerResponse(ret):
         print("Please enter the number of seat you choose: ")
         chosenSeat = input()
 
-        return comPack2(chosenSeat)
+        return ChunckedData(2,chosenSeat = seatChosed)
 
     elif(type == -2):
         """
@@ -90,7 +57,7 @@ def playerResponse(ret):
 
         target = input()
 
-        return comPack_3(target)
+        return ChunckedData(-3,target = target)
 
     elif(type == 4):
         """
@@ -100,7 +67,7 @@ def playerResponse(ret):
         print(ret.content['description'])
         print(ret.content['parameter'])
 
-        return comPack_4()
+        return ChunckedData(-4, ACK = True)
 
     elif(type == 5):
         """
@@ -109,17 +76,28 @@ def playerResponse(ret):
         print(ret.content['content'])
 
     elif(type == 6):
+        '''
+        限制时间发言阶段
+        '''
         print("the time for you to speak is %d" %(ret.content['timeLimit']))
         ReceiveTimeoutError(timeout=ret.content['timeLimit'])
         content = input()
 
-        return comPack_6(content)
+        return ChunckedData(-6, content = content)
 
     elif(type == 7):
+        '''
+        投票阶段
+        '''
         print(ret.content['prompt'])
         candidate = input()
 
-        return comPack_7(candidate)
+        if (candidate.isspace() == True):
+            ret = ChunckedData(-7, vote=False, candidate=0)
+        else:
+            ret = ChunckedData(-7, vote=True, candidate=candidate)
+
+        return ret
 
     elif(type == 8):
         pass
