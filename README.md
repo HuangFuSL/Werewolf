@@ -32,13 +32,17 @@ The final project of Computer Network in 2020A, written in Python.
     * GUI
 * 2020/10/25
   * Recent progress report
-  * Player's identity layer (Finished in [abstraction.py](Werewolf/abstraction.py), **code review in progress**)
+  * Player's identity layer (Finished in [abstraction.py](Werewolf/abstraction.py), **code review finished**)
   * Starting the implementation of the server side after the code review
   * Starting the implementation of the client side after the code review
 * 2020/10/31
   * Recent progress report
   * Discussed the framework of the server and server side
   * Detailed implementation of client and server side should be progressed
+* 2020/11/08
+  * Recent progress report
+  * Discussed the detailed implementation of the client side and the usage of the Protocol
+  * Discussed the interface (packets used) between the client side and the server side.
 
 ### From 2020/10/12
 
@@ -117,6 +121,22 @@ The server plays a role as the God in the werewolf game, most game rules are car
 * Child thread: it carry out the function of user input. 
 
 ![Client](img//Client.svg)
+
+### From 2020/10/08
+
+**Implementation of server side**
+
+The code is committed to [server.py](Werewolf/server.py) and [logic.py](Werewolf/server/logic.py)
+
+**Currently pending for further implementation and code review!**
+
+**Implementation of client side**
+
+Discussed implementation of the special ability of wolves (狼人自爆). The consensus was that this ability is triggered by Ctrl-C. Python will raise an `KeyboardInterrupt` exception to break out from the ongoing thread. The client use `try-except` to catch this input and start processing.
+
+The current code is committed to [client_subthread.py](Werewolf/client_subthread.py). This file is not designed to be a standalone Python script file. It is to be checked and modulized.
+
+**Currently pending for further implementation and code review!**
 
 <!-- 所有的人抽象成基类，所需的属性与方法如下：
 
