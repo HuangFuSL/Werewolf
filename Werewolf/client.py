@@ -114,8 +114,7 @@ class IoThread(Thread):
             pass
         
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.socket.connect(ADDR)
-        
+        ret.send(self, self.socket, ADDR)
         
 
 class Player():
