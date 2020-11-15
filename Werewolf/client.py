@@ -23,10 +23,10 @@ class ReceiveTimeoutError(Exception):
         return "Data receive timeout."
 
 class IoThread(Thread):
-    def __init__(self, threadID, ChunkedData):
+    def __init__(self, ChunkedData, ADDR):
         super().__init__()
-        self.threadID = threadID
         self.packet = ChunkedData
+        self.ADDR = ADDR
 
     def run(self):
         type = (int)ret.packetType
@@ -112,6 +112,11 @@ class IoThread(Thread):
     
         elif(type == 8):
             pass
+        
+        self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.socket.connect(ADDR)
+        
+        
 
 class Player():
     def __init__(self, host, port):
