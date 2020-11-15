@@ -8,7 +8,7 @@ The final project of Computer Network in 2020A, written in Python.
 
 * [x] Protocol implementation
 * [x] Player identity abstraction
-* [ ] Server side interface implementation
+* [x] Server side interface implementation
 * [ ] Client side interface implementation
 * [ ] Graphics user interface implementation (**depreciated**)
 
@@ -43,8 +43,12 @@ The final project of Computer Network in 2020A, written in Python.
   * Recent progress report
   * Discussed the detailed implementation of the client side and the usage of the Protocol
   * Discussed the interface (packets used) between the client side and the server side.
+* 2020/11/15
+  * Recent progress report
+  * Resolve issues
+  * Discussed on the communication between the client and the server ([server发送的包](https://github.com/HuangFuSL/Werewolf/issues/17)).
 
-### From 2020/10/12
+### 2020/10/12
 
 Function Demand: Gamerule, which is listed in [docs](docs/docs/gamerule.md).
 
@@ -55,7 +59,7 @@ Demo implementation:
 
 Protocol implementation: Please refer to its [introduction](Werewolf/WP/README.md) page
 
-### From 2020/10/16
+### 2020/10/16
 
 **Function Demand: Player's identity**
 
@@ -90,7 +94,7 @@ The server should control the game progress, and inform each player's action.
 
 PyQt5 is used to design and implement the GUI. A prototype will be needed.
 
-### From 2020/10/25
+### 2020/10/25
 
 **Code Review Result of [abstraction.py](Werewolf/abstraction.py)**
 
@@ -102,7 +106,7 @@ The original file is modified to meet the function demand. Refer to the annotati
 
 **Implementation of client side**
 
-### From 2020/10/31
+### 2020/10/31
 
 **Implementation of server side**
 
@@ -122,7 +126,7 @@ The server plays a role as the God in the werewolf game, most game rules are car
 
 ![Client](img//Client.svg)
 
-### From 2020/10/08
+### 2020/11/08
 
 **Implementation of server side**
 
@@ -137,6 +141,33 @@ Discussed implementation of the special ability of wolves (狼人自爆). The co
 The current code is committed to [client_subthread.py](Werewolf/client_subthread.py). This file is not designed to be a standalone Python script file. It is to be checked and modulized.
 
 **Currently pending for further implementation and code review!**
+
+### 2020/11/15
+
+**Implementation of server side**
+
+The code is committed to [server.py](Werewolf/server.py) and [logic.py](Werewolf/server/logic.py). For code review please refer to the following commits:
+
+* [https://github.com/HuangFuSL/Werewolf/tree/d3d3d5396759682fdd99e7a83a7d83ecb621cd33](d3d3d53), finished the election 
+* [https://github.com/HuangFuSL/Werewolf/tree/3b1c7c25f2227804fc319040944ef3aca2f49d2b](3b1c7c2), partly finished game logic during the night
+* [https://github.com/HuangFuSL/Werewolf/tree/6778dab034fe7b9d437c1563f287b041dae2e099](6778dab), finished game logic during the night
+* [https://github.com/HuangFuSL/Werewolf/tree/49c3218098d1e87be3cd1eb97d4ec35a81bde9d5](49c3218), server side has completed
+
+Issues during the development:
+
+* (Resolved) [关于server.py及logic.py文件](https://github.com/HuangFuSL/Werewolf/issues/11)
+* [已经完成Server部分的夜间流程](https://github.com/HuangFuSL/Werewolf/issues/15)
+
+Currently pending for code review, static syntax check and joint debug with the client.
+
+**Implementation of client side**
+
+Progressed the implementation of the client side. Existing code is merged into [client.py](Werewolf/client.py), and pending for code review. Please refer to [history commits](https://github.com/HuangFuSL/Werewolf/commits/main) for more information.
+
+Issues during the development:
+
+* (Resolved) [关于client.py文件](https://github.com/HuangFuSL/Werewolf/issues/10)
+* (Resolved) [关于client_subthread.py文件](https://github.com/HuangFuSL/Werewolf/issues/9)
 
 <!-- 所有的人抽象成基类，所需的属性与方法如下：
 
