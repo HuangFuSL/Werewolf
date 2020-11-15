@@ -116,7 +116,7 @@ class IoThread(Thread):
 class Player():
     def __init__(self, host, port):
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        ADDR = (host, post)
+        self.ADDR = (host, post)
         self.socket.connect(ADDR)
 
     def _getBasePacket(self) -> dict:
