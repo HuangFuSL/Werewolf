@@ -148,10 +148,10 @@ The current code is committed to [client_subthread.py](Werewolf/client_subthread
 
 The code is committed to [server.py](Werewolf/server.py) and [logic.py](Werewolf/server/logic.py). For code review please refer to the following commits:
 
-* [https://github.com/HuangFuSL/Werewolf/tree/d3d3d5396759682fdd99e7a83a7d83ecb621cd33](d3d3d53), finished the election 
-* [https://github.com/HuangFuSL/Werewolf/tree/3b1c7c25f2227804fc319040944ef3aca2f49d2b](3b1c7c2), partly finished game logic during the night
-* [https://github.com/HuangFuSL/Werewolf/tree/6778dab034fe7b9d437c1563f287b041dae2e099](6778dab), finished game logic during the night
-* [https://github.com/HuangFuSL/Werewolf/tree/49c3218098d1e87be3cd1eb97d4ec35a81bde9d5](49c3218), server side has completed
+* [d3d3d53](https://github.com/HuangFuSL/Werewolf/tree/d3d3d5396759682fdd99e7a83a7d83ecb621cd33), finished the election 
+* [3b1c7c2](https://github.com/HuangFuSL/Werewolf/tree/3b1c7c25f2227804fc319040944ef3aca2f49d2b), partly finished game logic during the night
+* [6778dab](https://github.com/HuangFuSL/Werewolf/tree/6778dab034fe7b9d437c1563f287b041dae2e099), finished game logic during the night
+* [49c3218](https://github.com/HuangFuSL/Werewolf/tree/49c3218098d1e87be3cd1eb97d4ec35a81bde9d5), server side has completed
 
 Issues during the development:
 
