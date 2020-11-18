@@ -3,6 +3,7 @@ import json
 import socket
 import threading
 from io import BytesIO
+from time import sleep
 from .utils import _checkParam
 from typing import Any, Dict, Optional, Tuple
 
@@ -116,8 +117,6 @@ class ChunckedData(object):
 
     def send(self, connection: socket.socket, dest: Tuple[Any, Any]):
         connection.connect(dest)
-        assert (self.content['destAddr'],
-                self.content['destPort']) == connection.getpeername()
         connection.send(bytes(self.toBytesArray()))
 
 
@@ -125,8 +124,6 @@ def _recv(connection: socket.socket) -> ChunckedData:
     connection.listen(5)
     c = connection.accept()[0]
     ret = ChunckedData(0, rawData=c.recv(16384))
-    assert (ret.content['destAddr'],
-            ret.content['destPort']) == c.getsockname()
     c.close()
     return ret
 
@@ -162,3 +159,33 @@ class ReceiveThread(threading.Thread):
             raise self.exception
         except:
             return None
+
+
+class TimeLock(threading.Thread):
+    """
+    Start a thread waiting in the background.
+
+    Initialization:
+
+        timeout: int, the specified waiting time
+
+    Methods:
+
+        TimeLock.start(): start waiting
+        TimeLock.getStatus(): get current status
+
+    Notice:
+
+        **TimeLock.setDeamon(True) should be called before starting.**
+    """
+
+    def __init__(self, timeout: float):
+        self.end = False
+        self.timeout = timeout
+
+    def run(self):
+        sleep(self.timeout)
+        self.end = True
+
+    def getStatus(self):
+        return self.end

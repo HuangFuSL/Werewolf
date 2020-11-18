@@ -243,9 +243,8 @@ class Game:
         # Send response
         identityCode: int = getIdentityCode(self.activePlayer[id])
         packet: Dict[str, Any] = getBasePacket(server, client)
-        packet["success"] = True
-        packet["chosenSeat"] = id
-        packet["identityCode"] = identityCode
+        packet["seat"] = id
+        packet["identity"] = identityCode
         sendingThread: Thread = Thread(
             target=ChunckedData(-1, **
                                 packet).send, args=(self.activePlayer[id].socket,)
@@ -651,8 +650,9 @@ class Game:
             packetContent.update(**predictor._getBasePacket())
             packetContent['action'] = getIdentityCode(
                 self.activePlayer[predictorTarget]) >= 0
+            packetContent['target'] = -1024
             sendingThread: Thread = Thread(
-                target=ChunckedData(-1, **
+                target=ChunckedData(-3, **
                                     packetContent).send, args=(predictor.socket,)
             )
             sendingThread.start()

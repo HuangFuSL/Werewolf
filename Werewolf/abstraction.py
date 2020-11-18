@@ -1,10 +1,8 @@
 import socket
-import abc
-from time import sleep
 from threading import Thread
 from typing import Optional, List, Tuple
 
-from .WP.api import ChunckedData, ReceiveThread, ReceiveTimeoutError
+from .WP.api import ChunckedData, ReceiveThread, TimeLock
 
 global _default_timeout
 _default_timeout: float = 12.0  # 超时时间，是各方法的默认参数
@@ -28,36 +26,6 @@ def default_timeout(timeout=None) -> float:
     if timeout is not None and timeout > 0:
         _default_timeout = timeout
     return _default_timeout
-
-
-class TimeLock(Thread):
-    """
-    Start a thread waiting in the background.
-
-    Initialization:
-
-        timeout: int, the specified waiting time
-
-    Methods:
-
-        TimeLock.start(): start waiting
-        TimeLock.getStatus(): get current status
-
-    Notice:
-
-        **TimeLock.setDeamon(True) should be called before starting.**
-    """
-
-    def __init__(self, timeout: float = _default_timeout):
-        self.end = False
-        self.timeout = timeout
-
-    def run(self):
-        sleep(self.timeout)
-        self.end = True
-
-    def getStatus(self):
-        return self.end
 
 
 class Person():
@@ -198,7 +166,7 @@ class Person():
         packet['prompt'] = 'Do you want to be the policeman?\nYou have %f seconds to decide.' % (
             timeout, )
         packet['timeout'] = timeout
-        packetSend = ChunckedData(3, **packet)
+        packetSend = ChunckedData(3, iskill=False, **packet)
         sendingThread = Thread(target=packetSend.send, args=(self.socket,))
         sendingThread.start()
         return self._startListening(timeout=timeout)
@@ -399,7 +367,7 @@ class Wolf(Person):
         packet['prompt'] = "Please select a person to kill.\nYou have %f seconds to decide with your partner" % (
             timeout, )
         packet['timeout'] = timeout
-        packetSend = ChunckedData(3, **packet)
+        packetSend = ChunckedData(3, iskill=True, **packet)
         sendingThread = Thread(target=packetSend.send, args=(self.socket, ))
         sendingThread.start()
         timer = TimeLock(timeout)
@@ -469,7 +437,7 @@ class SkilledPerson(Person):
         packet['format'] = format
         packet['prompt'] = prompt
         packet['timeout'] = timeout
-        packetSend = ChunckedData(3, **packet)
+        packetSend = ChunckedData(3, iskill=False, **packet)
         sendingThread = Thread(target=packetSend.send, args=(self.socket, ))
         sendingThread.start()
         return self._startListening(timeout)
@@ -545,13 +513,13 @@ class Witch(SkilledPerson):
             str(killed) if killed else "unknown", )
         packetSend = ChunckedData(5, **packet)
         if self.used == 0:  # Not ever used
-            prompt = """Please select a person to use the poison. If you want to save the victim, enter "save".
+            prompt = """Please select a person to use the poison. If you want to save the victim, enter "0".
     You have %f seconds to decide.""" % (timeout, )
         elif self.used == 1:  # Saved somebody.
             prompt = """Please select a person to use the poison. You have %f seconds to decide.""" % (
                 timeout, )
         elif self.used == 2:  # Killed somebody
-            prompt = """If you want to save the victim, enter "save". You have %f seconds to decide.""" % (
+            prompt = """If you want to save the victim, enter "0". You have %f seconds to decide.""" % (
                 timeout, )
         else:
             return None

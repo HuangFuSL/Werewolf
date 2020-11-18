@@ -36,13 +36,14 @@ _checkParam = {
     },
     1: {},
     -1: {
-        'Seat': int,                    # 分配的座位号
+        'seat': int,                    # 分配的座位号
         'identity': int                # 分配的身份
     },
     3: {
         # 'identityLimit': tuple,         # 能收到消息的玩家身份列表
         # 'playerNumber': int,          # 目的玩家编号（deprecated）
-        'format': str,                  # 玩家应当输入的格式，示例 "int" 或 "(str, int)"
+        'isnight': bool,                # 是否是晚上
+        'format': str,                  # 玩家应当输入的格式，示例 "int"
         'prompt': str,                  # 输入提示
         'timeLimit': int                # 时间限制
     },
@@ -66,5 +67,8 @@ _checkParam = {
         'vote': bool,                   # 是否投票
         'candidate': int                # 投票候选人
     },
-    8: {}
+    8: {},
+    -8: {
+        'result': bool  # The result of the game
+    }
 }
