@@ -4,7 +4,7 @@ from random import randint, shuffle
 from threading import Thread
 from typing import Any, Callable, Dict, Tuple
 
-from ..abstraction import *
+from .abstraction import *
 from ..WP import ChunckedData, _recv
 from .util import *
 

@@ -2,13 +2,12 @@ import socket
 from threading import Thread
 from typing import Optional, List, Tuple
 
-from .WP.api import ChunckedData, ReceiveThread, TimeLock
+from ..WP.api import ChunckedData, ReceiveThread, TimeLock
 
-global _default_timeout
-_default_timeout: float = 12.0  # 超时时间，是各方法的默认参数
+defaultTimeout: float = 120.0  # 超时时间，是各方法的默认参数
 
 
-def default_timeout(timeout=None) -> float:
+def setdefault_timeout(timeout=None) -> float:
     """
     Get or set the default timeout value.
 
@@ -22,10 +21,10 @@ def default_timeout(timeout=None) -> float:
 
     * float, the value of the default timeout
     """
-    global _default_timeout
+    global defaultTimeout
     if timeout is not None and timeout > 0:
-        _default_timeout = timeout
-    return _default_timeout
+        defaultTimeout = timeout
+    return defaultTimeout
 
 
 class Person():
@@ -130,7 +129,7 @@ class Person():
         sendingThread = Thread(target=packetSend.send, args=(self.socket, ))
         sendingThread.start()
 
-    def vote(self, timeout: float = _default_timeout) -> ReceiveThread:
+    def vote(self, timeout: float = defaultTimeout) -> ReceiveThread:
         """
         Send a package to a player to vote for the exiled.
 
@@ -149,7 +148,7 @@ class Person():
         sendingThread.start()
         return self._startListening(timeout=timeout)
 
-    def joinElection(self, timeout: float = _default_timeout) -> ReceiveThread:
+    def joinElection(self, timeout: float = defaultTimeout) -> ReceiveThread:
         """
         Send a package to a player to join the police election.
 
@@ -171,7 +170,7 @@ class Person():
         sendingThread.start()
         return self._startListening(timeout=timeout)
 
-    def voteForPolice(self, timeout: float = _default_timeout) -> Optional[ReceiveThread]:
+    def voteForPolice(self, timeout: float = defaultTimeout) -> Optional[ReceiveThread]:
         """
         Send a package to a player to vote for the police.
 
@@ -208,7 +207,7 @@ class Person():
         """
         self.police = val
 
-    def policeSetseq(self, timeout: float = _default_timeout) -> Optional[ReceiveThread]:
+    def policeSetseq(self, timeout: float = defaultTimeout) -> Optional[ReceiveThread]:
         """
         Send a package to the police to choose the sequence.
 
@@ -231,7 +230,7 @@ class Person():
         else:
             return None
 
-    def speak(self, timeout: float = _default_timeout) -> ReceiveThread:
+    def speak(self, timeout: float = defaultTimeout) -> ReceiveThread:
         """
         Send a package to a player to talk about the situation before the vote.
 
@@ -350,7 +349,7 @@ class Wolf(Person):
         """
         self.peerList.remove(peer)
 
-    def kill(self, timeout: float = _default_timeout) -> Optional[ReceiveThread]:
+    def kill(self, timeout: float = defaultTimeout) -> Optional[ReceiveThread]:
         """
         Wolves communicate with each other and specifying the victim
 
@@ -420,7 +419,7 @@ class SkilledPerson(Person):
         """
         self.used += increment
 
-    def skill(self, prompt: str = "", timeout: float = _default_timeout, format=int) -> ReceiveThread:
+    def skill(self, prompt: str = "", timeout: float = defaultTimeout, format=int) -> ReceiveThread:
         """
         Ask the player whether to use the skill
 
@@ -454,7 +453,7 @@ class KingOfWerewolves(Wolf, SkilledPerson):
         super(KingOfWerewolves, self).__init__(id, client, server)
         self.type = -3
 
-    def skill(self, timeout: float = _default_timeout):
+    def skill(self, timeout: float = defaultTimeout):
         prompt = """Please select a person to kill.
 you have %f seconds to decide.""" % (timeout, )
         return SkilledPerson.skill(self, prompt, timeout)
@@ -471,7 +470,7 @@ class WhiteWerewolf(Wolf, SkilledPerson):
         super(WhiteWerewolf, self).__init__(id, client, server)
         self.type = -2
 
-    def skill(self, timeout: float = _default_timeout):
+    def skill(self, timeout: float = defaultTimeout):
         prompt = """Please select a person to kill.
 You have %f seconds to decide.""" % (timeout, )
         return SkilledPerson.skill(self, prompt, timeout)
@@ -488,7 +487,7 @@ class Predictor(SkilledPerson):
         super(Predictor, self).__init__(id, client, server)
         self.type = 1
 
-    def skill(self, timeout: float = _default_timeout):
+    def skill(self, timeout: float = defaultTimeout):
         prompt = """Please select a person to inspect his identity.
 You have %f seconds to decide.""" % (timeout, )
         return SkilledPerson.skill(self, prompt, timeout)
@@ -505,7 +504,7 @@ class Witch(SkilledPerson):
         super(Witch, self).__init__(id, client, server)
         self.type = 2
 
-    def skill(self, killed: int = 0, timeout: float = _default_timeout):
+    def skill(self, killed: int = 0, timeout: float = defaultTimeout):
         packet = self._getBasePacket()
         if self.used % 2 == 0:
             killed = 0
@@ -537,7 +536,7 @@ class Hunter(SkilledPerson):
         super(Hunter, self).__init__(id, client, server)
         self.type = 3
 
-    def skill(self, timeout: float = _default_timeout):
+    def skill(self, timeout: float = defaultTimeout):
         prompt = """Please select a person to kill.
 You have %f seconds to decide.""" % (timeout, )
         return SkilledPerson.skill(self, prompt, timeout)
@@ -554,7 +553,7 @@ class Guard(SkilledPerson):
         super(Guard, self).__init__(id, client, server)
         self.type = 4
 
-    def skill(self, timeout: float = _default_timeout):
+    def skill(self, timeout: float = defaultTimeout):
         prompt = """Please select a person to guard.
 You have %f seconds to decide.""" % (timeout, )
         return SkilledPerson.skill(self, prompt, timeout)

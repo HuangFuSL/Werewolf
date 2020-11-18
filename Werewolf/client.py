@@ -322,11 +322,11 @@ def ProcessPacket(toReply: ChunckedData, context: dict) -> int:
     return 0
 
 
-if __name__ == "__main__":
-    if len(sys.argv) >= 3:
+def launchClient(argv: list):
+    if len(argv) >= 3:
         context = {
-            "clientAddr": sys.argv[1],
-            "clientPort": int(sys.argv[2]),
+            "clientAddr": sys.argv[1],  # TODO: IP地址考虑去掉
+            "clientPort": int(sys.argv[2]),  # TODO: 改成随机分配的端口
             "isalive": True
         }
     else:

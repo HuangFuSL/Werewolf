@@ -1,4 +1,4 @@
-from ..abstraction import *
+from .abstraction import *
 from typing import Tuple, Union
 from itertools import groupby
 
