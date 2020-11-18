@@ -70,5 +70,8 @@ _checkParam = {
     8: {},
     -8: {
         'result': bool  # The result of the game
+    },
+    9: {
+        'id': int
     }
 }

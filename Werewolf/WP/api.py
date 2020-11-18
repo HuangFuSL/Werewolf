@@ -86,11 +86,11 @@ class ChunckedData(object):
                 for i in _checkParam[''].keys():
                     if not isinstance(self.content[i], _checkParam[''][i]):
                         raise PacketFieldMismatchException(self.type, i, type(
-                            self.content[i]), type(_checkParam[''][i]))
+                            self.content[i]), _checkParam[''][i])
                 for i in _checkParam[self.type].keys():
                     if not isinstance(self.content[i], _checkParam[self.type][i]):
                         raise PacketFieldMismatchException(self.type, i, type(
-                            self.content[i]), type(_checkParam[self.type][i]))
+                            self.content[i]), _checkParam[self.type][i])
             except KeyError as a:
                 raise PacketTypeMismatchException(self.type, *a.args)
 

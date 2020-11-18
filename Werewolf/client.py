@@ -5,13 +5,15 @@ Created on Sat Nov  7 15:06:28 2020
 @author: lenovo-pc
 """
 
-from .WP.api import ReceiveThread
 import socket
 from socket import AF_INET, SOCK_STREAM
 import sys
 from threading import Thread
 from typing import Any, Optional, Tuple, Union
-from .WP import ChunckedData, TimeLock
+try:
+    from .WP import ChunckedData, TimeLock, ReceiveThread
+except ImportError:
+    from WP import ChunckedData, TimeLock, ReceiveThread
 
 BUFSIZE = 1024
 ROLE = 0
@@ -65,6 +67,19 @@ def getServerAddr(context: dict) -> Tuple[str, int]:
     )
 
 
+def getClientAddr(context: dict) -> Tuple[str, int]:
+    return (
+        context['clientAddr'],
+        context['clientPort']
+    )
+
+
+def getSocket(context: dict) -> socket.socket:
+    ret: socket.socket = socket.socket(AF_INET, SOCK_STREAM)
+    ret.bind(getClientAddr(context))
+    return ret
+
+
 class ReadInput(Thread):
     """
     The input thread, will be interrupted by KeyBoardInterruption
@@ -104,6 +119,8 @@ def ProcessPacket(toReply: ChunckedData, context: dict) -> int:
     """
     Ask for user input and build the corresponding packet.
     """
+    if context['isalive'] == False and toReply['type'] != -8:
+        return -2
     if toReply['type'] == -1:
         """
         -1: {
@@ -246,9 +263,11 @@ def ProcessPacket(toReply: ChunckedData, context: dict) -> int:
         readThread = ReadInput("", str, toReply['timeLimit'])
         readThread.setDaemon(True)
         readThread.start()
-        # TODO: 自爆在这里处理
         basePacket: dict = getBasePacket(context)
-        basePacket['content'] = readThread.getResult()
+        if isinstance(readThread.getResult(), str):
+            basePacket['content'] = readThread.getResult()
+        elif isinstance(readThread.getResult(), KeyboardInterrupt):
+            raise readThread.getResult()
         packetType = -6
 
         packetSend = ChunckedData(packetType, **basePacket)
@@ -287,6 +306,7 @@ def ProcessPacket(toReply: ChunckedData, context: dict) -> int:
         """
         8: {},
         """
+        context['isalive'] = False
         return -2
 
     elif toReply['type'] == -8:
@@ -300,3 +320,65 @@ def ProcessPacket(toReply: ChunckedData, context: dict) -> int:
         else:
             return -1
     return 0
+
+
+if __name__ == "__main__":
+    if len(sys.argv) >= 3:
+        context = {
+            "clientAddr": sys.argv[1],
+            "clientPort": int(sys.argv[2]),
+            "isalive": True
+        }
+    else:
+        context = {
+            "clientAddr": input("Please enter the IP address of the client:\n"),
+            "clientPort": int(input("Please enter the port of the client:\n")),
+            "isalive": True
+        }
+    context["serverAddr"] = input(
+        "Please enter the IP address of the server:\n")
+    context['serverPort'] = int(
+        input("Please enter the port of the server:\n"))
+    context['publicPort'] = context['serverPort']
+    basePacket: dict = getBasePacket(context)
+    packetSend = ChunckedData(1, **basePacket)
+    sock = socket.socket(AF_INET, SOCK_STREAM)
+    sendingThread = Thread(
+        target=packetSend.send, args=(sock, getServerAddr(context))
+    )
+    receivingThread = ReceiveThread(getSocket(context), 120)
+    receivingThread.start()
+    sendingThread.start()
+    receivingThread.join()
+    curPacket = receivingThread.getResult()
+
+    assert curPacket is not None, "Failed to connect to the server."
+    ret: int = 0
+    while ret ** 2 != 1:
+        try:
+            assert curPacket is not None, "Lost connection to the server."
+            ret = ProcessPacket(curPacket, context)
+            receivingThread = ReceiveThread(getSocket(context), 180)
+            receivingThread.start()
+            receivingThread.join()
+            curPacket = receivingThread.getResult()
+        except KeyboardInterrupt:
+            if context['identity'] >= 0:
+                continue
+            if context["isalive"] == False:
+                print("You hace already died, please wait for the result.")
+                continue
+            else:
+                basePacket: dict = getBasePacket(context)
+                basePacket['id'] = context['id']
+                packetSend = ChunckedData(9, **basePacket)
+                sock = socket.socket(AF_INET, SOCK_STREAM)
+                sendingThread = Thread(
+                    target=packetSend.send, args=(sock, getServerAddr(context))
+                )
+                sendingThread.start()
+
+    if ret == 1:
+        print("You won!")
+    elif ret == -1:
+        print("You lost!")
