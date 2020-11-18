@@ -142,3 +142,5 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+Werewolf/.DS_Store
+.DS_Store
