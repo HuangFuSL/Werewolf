@@ -4,7 +4,7 @@ import socket
 import threading
 from io import BytesIO
 from .utils import _checkParam
-from typing import Any, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple
 
 
 class PacketTypeMismatchException(Exception):
@@ -65,12 +65,12 @@ class ChunckedData(object):
         with gzip.GzipFile(mode='rb', fileobj=buffer) as output:
             return str(output.read())
 
-    def __init__(self, packetType: int, **kwargs):
+    def __init__(self, packetType: int, **kwargs: Any):
         """
         Defines a new data packet.
         """
         self.type: int = packetType
-        self.content: dict = {}
+        self.content: Dict[str, Any] = {}
         if self.type == 0:
             try:
                 self.content = json.loads(self._decompress(kwargs['rawData']))
@@ -100,7 +100,7 @@ class ChunckedData(object):
         else:
             return self.content['destAddr'], self.content['destPort']
 
-    def setValue(self, name, value):
+    def setValue(self, name: str, value: Any):
         self.content[name] = value
 
     def toBytesArray(self) -> bytearray:
@@ -117,7 +117,7 @@ class ChunckedData(object):
 
 def _recv(connection: socket.socket) -> ChunckedData:
     connection.listen(5)
-    c, addr = connection.accept()
+    c = connection.accept()[0]
     ret = ChunckedData(0, rawData=c.recv(16384))
     assert (ret.content['destAddr'],
             ret.content['destPort']) == c.getsockname()

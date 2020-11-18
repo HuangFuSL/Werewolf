@@ -6,10 +6,11 @@ from typing import Optional, List, Tuple
 
 from .WP.api import ChunckedData, ReceiveThread, ReceiveTimeoutError
 
-_default_timeout = 30.0  # 超时时间，是各方法的默认参数
+global _default_timeout
+_default_timeout: float = 12.0  # 超时时间，是各方法的默认参数
 
 
-def default_timeout(timeout=None) -> Optional[float]:
+def default_timeout(timeout=None) -> float:
     """
     Get or set the default timeout value.
 
@@ -21,14 +22,12 @@ def default_timeout(timeout=None) -> Optional[float]:
 
     Returns:
 
-    * float if timeout parameter is `None`
-    * `None` if timeout parameter is float
+    * float, the value of the default timeout
     """
     global _default_timeout
     if timeout is not None and timeout > 0:
         _default_timeout = timeout
-    else:
-        return _default_timeout
+    return _default_timeout
 
 
 class TimeLock(Thread):
@@ -110,16 +109,16 @@ class Person():
             Person, the objcet created.
         """
         # AF_INET：使用TCP/IP-IPv4协议簇；SOCK_STREAM：使用TCP流
-        #self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM, 0)
-        #self.recv = socket.socket(socket.AF_INET, socket.SOCK_STREAM, 0)
+        self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM, 0)
+        self.recv = socket.socket(socket.AF_INET, socket.SOCK_STREAM, 0)
         self.client = client
         self.server = server
         self.id = id
         self.police = False  # police的值由服务器进行分配，在__init__()方法中被初始化为False
         self.innocent = True  # 如果某个客户端是狼人，则innocent的值为False；否则为True
         self.alive = True
-        #self.recv.bind(server)
-        #self.recv.listen(1)
+        self.recv.bind(server)
+        self.recv.listen(1)
 
     def _getBasePacket(self) -> dict:
         """
@@ -290,7 +289,7 @@ class Person():
 #       sendingThread = Thread(target=packetSend.send(), args=(self.socket, ))
 #       sendingThread.start()
 
-    def onDead(self, withFinalWords: bool, timeouts: tuple):
+    def onDead(self, withFinalWords: bool, timeouts: float):
         """
         Called on the death of a player.
 
@@ -314,17 +313,17 @@ class Person():
             sendingThread = Thread(
                 target=packetSend.send, args=(self.socket, ))
             sendingThread.start()
-            ret.append(self._startListening(timeout=timeouts[0]))
+            ret.append(self._startListening(timeout=timeouts))
         else:
             ret.append(None)
         if withFinalWords:
             packet = self._getBasePacket()
-            packet['timeLimit'] = timeouts[1]
+            packet['timeLimit'] = timeouts
             packetSend = ChunckedData(6, **packet)
             sendingThread = Thread(
                 target=packetSend.send, args=(self.socket, ))
             sendingThread.start()
-            ret.append(self._startListening(timeout=timeouts[1]))
+            ret.append(self._startListening(timeout=timeouts))
         else:
             ret.append(None)
         return tuple(ret)
@@ -432,7 +431,7 @@ class SkilledPerson(Person):
 
     Attributes:
 
-        used: bool, if the value is True, the player can no longer use the ability
+        used: int, if the value is True, the player can no longer use the ability
 
     Methods:
 
@@ -445,7 +444,7 @@ class SkilledPerson(Person):
         Initialization method inherited from class Person
         """
         super(SkilledPerson, self).__init__(id, client, server)
-        self.used = 0
+        self.used: int = 0
 
     def postSkill(self, increment=1):
         """

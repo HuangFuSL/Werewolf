@@ -3,7 +3,7 @@ from typing import Tuple, Union
 from itertools import groupby
 
 
-def getVotingResult(vote: List[int], policevote: int) -> List[int]:
+def getVotingResult(vote: List[int], policevote: Optional[int] = None) -> List[int]:
     """
     Count the vote result and the return the candidates with most votes
 
@@ -15,13 +15,13 @@ def getVotingResult(vote: List[int], policevote: int) -> List[int]:
 
     `List[int]`, the candidates with most votes
     """
-    voteList: dict = {i: len(list(j)) for i, j in groupby(sorted(vote))}
+    voteList: dict = {i: float(len(list(j))) for i, j in groupby(sorted(vote))}
     # the police case
     if policevote is not None:
-        if voteList['%d' % policevote] is not None:
-            voteList['%d' % policevote] += 1.5
+        if policevote in voteList.keys():
+            voteList[policevote] += 1.5
         else:
-            voteList['%d' % policevote] = 1.5
+            voteList[policevote] = 1.5
     ret: List[int] = []
     max: int = 0
     for i in voteList:
@@ -53,5 +53,6 @@ uniqueIdentity = ['Predictor',
 
 
 def getBasePacket(src: Tuple[str, int], dest: Tuple[str, int]) -> dict:
-    ret = {'srcAddr': src[0], 'srcPort': src[1], 'destAddr': dest[0], 'destPort': dest[1]}
+    ret = {'srcAddr': src[0], 'srcPort': src[1],
+           'destAddr': dest[0], 'destPort': dest[1]}
     return ret

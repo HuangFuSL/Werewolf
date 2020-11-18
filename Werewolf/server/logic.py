@@ -1,10 +1,12 @@
-from ..abstraction import *
-from random import shuffle, randint
-from ..WP import ChunckedData, _recv
+import ctypes
+import threading
+from random import randint, shuffle
 from threading import Thread
+from typing import Any, Callable, Dict, Tuple
+
+from ..abstraction import *
+from ..WP import ChunckedData, _recv
 from .util import *
-from typing import Tuple
-from itertools import groupby
 
 
 class Game:
@@ -55,12 +57,12 @@ class Game:
 
         # Attribute initialization
         self.playerCount: int = playerCount
-        self.allPlayer: dict = {}
-        self.activePlayer: dict = {}
+        self.allPlayer: Dict[int, Any] = {}
+        self.activePlayer: Dict[int, Any] = {}
         self.listeningAddr: Tuple[str, int] = (ip, port)
         self.ports: List[int] = list(range(port + 1, port + playerCount + 2))
         self.running: bool = False
-        self.identityList: list = []
+        self.identityList: List[Any] = []
         self.listener: IncomingConnection = IncomingConnection(
             self.listeningAddr, self)
         # Further initialization
@@ -69,7 +71,7 @@ class Game:
         # Game parameters
         self.day: int = 0
         self.night: int = 0
-        self.police = None
+        self.status: int = 0
 
         self.victim: List[int] = []
         self.guardedLastNight: int = 0
@@ -111,6 +113,8 @@ class Game:
         assert (
             len(self.activePlayer) == self.playerCount
         ), "The number of players is not enough"
+        assert self.status == 0, "The game is already finished"
+        assert self.day == 0 and self.night == 0
         self.running = True  # 激活游戏，不允许新的玩家进入
 
     def deactivate(self):
@@ -141,13 +145,16 @@ class Game:
             else:
                 numSkilled += 1
         if numSkilled > 0 and numVillager > 0 and numWolf > 0:
+            self.status = 0
             return 0
         elif numWolf == 0:
+            self.status = 1
             return 1
         else:
+            self.status = -1
             return -1
 
-    def broadcast(self, srcPlayer, content: str):
+    def broadcast(self, srcPlayer: Any, content: str):
         """
         Send a packet to all the players except the `srcPlayer` (if not `None`)
 
@@ -162,13 +169,11 @@ class Game:
         """
         for id in self.activePlayer:
             player = self.activePlayer[id]
-            if player == srcPlayer:
+            if player is srcPlayer:
                 continue
             player.inform(content)
 
-        # !SECTION
-
-    def setIdentityList(self, **kwargs):
+    def setIdentityList(self, **kwargs: int):
         """
         Initialize the identity configuration.
 
@@ -202,6 +207,7 @@ class Game:
             for i in range(kwargs[identity]):
                 # eval(identity) returns a class
                 self.identityList.append(eval(identity))
+                i + 1
         shuffle(self.identityList)
 
     def addPlayer(self, data: ChunckedData):
@@ -236,7 +242,7 @@ class Game:
         self.allPlayer[id] = newplayer
         # Send response
         identityCode: int = getIdentityCode(self.activePlayer[id])
-        packet: dict = getBasePacket(server, client)
+        packet: Dict[str, Any] = getBasePacket(server, client)
         packet["success"] = True
         packet["chosenSeat"] = id
         packet["identityCode"] = identityCode
@@ -267,11 +273,12 @@ class Game:
         """
 
         # Ask for election
-        electionCandidate = [(player, player.joinElection())
+        electionCandidate: List[Tuple[int, ReceiveThread]]
+        electionCandidate = [(player, self.activePlayer[player].joinElection())
                              for player in self.activePlayer]
         for player, recthread in electionCandidate:
             recthread.join()
-        candidate: list = []
+        candidate: List[int] = []
         for player, recthread in electionCandidate:
             if recthread.getResult() is not None and recthread.getResult().content['action']:
                 candidate.append(player)
@@ -285,26 +292,30 @@ class Game:
             Loop variable: i - only a counter
             """
             for player in candidate:
-                current = player.speak()
+                current = self.activePlayer[player].speak()
                 current.join()
-                self.broadcast(player, current.getResult().content['content'])
+                if current.getResult() is not None:
+                    self.broadcast(
+                        player, current.getResult().content['content']
+                    )
 
             # Ask for vote
             voteThread: List[ReceiveThread] = []
             for player in self.activePlayer:
                 if player in candidate:
                     continue  # Candidate cannot vote
-                voteThread.append(player.voteForPolice)
+                voteThread.append(self.activePlayer[player].voteForPolice)
             for thread in voteThread:
                 thread.join()
 
             # Get the result and count the vote
-            vote: list = []
-            packetContent: dict = {}
+            vote: List[int] = []
+            packetContent: Dict[str, Any] = {}
             for thread in voteThread:
-                if thread.getResult() is None:
+                if thread.getResult() is not None:
+                    packetContent = thread.getResult().content
+                else:
                     continue
-                packetContent = thread.getResult().content
                 if packetContent['vote'] and packetContent['candidate'] in self.activePlayer:
                     vote.append(packetContent['candidate'])
             result: List[int] = getVotingResult(vote)
@@ -315,7 +326,7 @@ class Game:
 
             if (len(result) == 1):
                 self.broadcast(None, "The police is player %d" % (result[0], ))
-                self.police = self.activePlayer[result[0]]
+                self.activePlayer[result[0]].police = True
                 return None
             else:
                 self.broadcast(
@@ -326,40 +337,54 @@ class Game:
                 )
                 candidate.clear()
                 candidate = [self.activePlayer[_] for _ in result]
-        self.police = None
+        self.broadcast(None, "No police in the game")
         return None
 
     def victimSkill(self):
+        """
+        After a player has died, the victim should take the following actions in sequence:
+
+        - If police dies, he should decide the next police.
+        - Anyone died during the day or the first night can have their last words.
+        - If the guard or the king of werewolves dies and not dying from the poison, he can kill a person at this time.
+        """
         for id in self.victim:
             victim = self.allPlayer[id]
-            victim.onDead(True if self.night == 1 or self.day ==
-                          self.night else False, default_timeout())
+            retMsg = victim.onDead(True if self.night == 1 or self.day ==
+                                   self.night else default_timeout())
+            if retMsg[0] and retMsg[0].content['vote'] and retMsg[0].content['candidate'] in self.activePlayer:
+                self.activePlayer[retMsg[0].content['candidate']] = True
+            if retMsg[1]:
+                self.broadcast(None, retMsg[1].content['content'])
             if isinstance(victim, Hunter) or isinstance(victim, KingOfWerewolves):
                 if (self.hunterStatus and isinstance(victim, Hunter)) \
                         or (self.kingofwolfStatus and isinstance(victim, KingOfWerewolves)):
                     gunThread = victim.skill()
                     gunThread.join()
-                    packetContent: dict = gunThread.getResult().content
+                    if gunThread.getResult() is not None:
+                        packetContent: Dict[str, Any]
+                        packetContent = gunThread.getResult().content
+                    else:
+                        break
                     if packetContent['action'] and packetContent['target'] in self.activePlayer:
                         self.broadcast(None, "the player %d has been killed by the player %d"
                                        % (packetContent['target'], id))
-                        # TODO kick the player out
+                        self.activePlayer.pop(packetContent['target'])
                         status = self.checkStatus()
                         if status != 0:
                             return status
-                        victim.onDead(True, default_timeout())
+                        victim.onDead(True, default_timeout(None))
                     else:
                         victim.inform(
                             "you didn't choose the target or you choose the wrong number!")
                 else:
-                    victim.inform("you can't open the gun!")
-        # reset the status of the gun
-        self.hunterStatus = True
-        self.kingofwolfStatus = True
+                    victim.inform("you can't shoot the gun!")
+        self.victim.clear()
 
     def dayTime(self) -> int:
         """
-        # Implements the game logic in daytime. Workflow:
+        Implements the game logic in daytime. Workflow:
+
         - Announce the victim
           - If the king of werewolves or the hunter is killed by the wolves, ask them
           - If the police exists - randomly choose a side from the police
@@ -383,7 +408,7 @@ class Game:
         # ANCHOR: Implement the game logic in daytime
 
         startpoint: int = 0
-        exile: list = []
+        exile: List[int] = []
 
         # announce the victim and check the game status
         if len(self.victim) == 0:
@@ -399,30 +424,37 @@ class Game:
             self.victimSkill()
 
         # ask the police (if exists) to choose the talking sequence
-        talkSequence: list[int] = []
+        talkSequence: List[int] = []
         isClockwise: bool = True
-        if len(self.victim) == 0:
-            i = 0
-            for id in self.activePlayer:
-                if i == 0:
-                    startpoint = id
-                if id > self.victim.pop():
-                    startpoint = id
-                i += 1
-        else:
-            startpoint = self.victim[0]
+        packetContent: Dict[str, Any] = {}
+        policeID: int = 0
 
-        if self.police is not None:
-            police = self.activePlayer[self.police]
+        for player in self.activePlayer:
+            """
+            Find the police
+            """
+            if self.activePlayer[player].police:
+                policeID = player
+
+        startpoint = self.victim[0] \
+            if len(self.victim) == 1 \
+            else (policeID if policeID else min(self.activePlayer.keys()))
+
+        # Police choose the direction
+        if policeID:
+            police = self.activePlayer[policeID]
             policeThread = police.policeSetseq()
             policeThread.join()
-            packetContent: dict = policeThread.getResult().content
-            if packetContent['clockwise'] == False:
-                isClockwise = False
+            isClockwise = policeThread.getResult().content['clockwise'] \
+                if policeThread.getResult() is not None \
+                else True
 
-        talkSequence = self.setSeq(startpoint, isClockwise)
+        talkSequence: List[int] = self.setSeq(startpoint, isClockwise)
+        exile: List[int] = []
 
         # active player talk in sequence
+        policeVoteThread: Optional[ReceiveThread] = None
+        policeVote: Optional[int] = None
         for i in range(2):
             """
             Vote for the exile
@@ -430,48 +462,66 @@ class Game:
             Loop variable: i - only a counter
             """
             for id in talkSequence:
-                player = self.activePlayer['%d' % id]
-                current = player.speak()
-                current.join()
-                self.broadcast(player, current.getResult().content['content'])
+                if id not in exile:
+                    player = self.activePlayer[id]
+                    current = player.speak()
+                    current.join()
+                    self.broadcast(
+                        player, current.getResult().content['content'])
 
             # Ask for vote
             voteThread: List[ReceiveThread] = []
             for id in self.activePlayer:
-                if id != self.police:
+                if isinstance(self.activePlayer[id], Idiot) and self.activePlayer[id].used:
+                    """
+                    An idiot cannot vote
+                    """
+                    continue
+                if id != policeID:
                     voteThread.append(self.activePlayer[id].vote())
+                else:
+                    policeVoteThread = self.activePlayer[id].vote()
+
             for thread in voteThread:
                 thread.join()
-            # police vote is special case
-            policevote = None
-            if self.police is not None:
-                policevoteThread = self.activePlayer[self.police].vote()
-                policevoteThread.join()
-                packetContent = policevoteThread.getTesult().content
+            if policeVoteThread is not None:
+                policeVoteThread.join()
+            if policeVoteThread is not None and policeVoteThread.getResult() is not None:
+                packetContent = policeVoteThread.getResult().content
                 if packetContent['vote'] and packetContent['candidate'] in self.activePlayer:
-                    policevote = packetContent['candidate']
+                    policeVote = packetContent['candidate']
 
             # Get the result and count the vote
-            # TODO: IDIOT
-            vote: list = []
-            packetContent: dict = {}
+            vote: List[int] = []
+            packetContent: Dict[str, Any] = {}
             for thread in voteThread:
                 if thread.getResult() is None:
                     continue
                 packetContent = thread.getResult().content
                 if packetContent['vote'] and packetContent['candidate'] in self.activePlayer:
                     vote.append(packetContent['candidate'])
-            result: List[int] = getVotingResult(vote, policevote)
+            result: List[int] = getVotingResult(vote, policeVote)
 
             del voteThread
             del vote
             del packetContent
 
-            exile = []
             if (len(result) == 1):
-                self.broadcast(None, "The exile is player %d" % (result[0],))
-                exile = self.activePlayer[result[0]]
-                return None
+                """
+                Check the identity of the exiled. Idiot can escape from dying.
+                """
+                if not isinstance(self.activePlayer[result[0]], Idiot) or self.activePlayer[result[0]].used:
+                    self.broadcast(
+                        None, "The exiled is player %d" % (result[0],)
+                    )
+                    exile.append(result[0])
+                else:
+                    self.activePlayer[result[0]].used = 1
+                    self.broadcast(
+                        None, "Player %d is the idiot." % (result[0],)
+                    )
+                    exile.pop()
+                break
             else:
                 self.broadcast(
                     None,
@@ -486,16 +536,23 @@ class Game:
         if len(exile) == 0:
             self.broadcast(None, "no one exile!")
         else:
+            del self.activePlayer[exile[0]]
+            self.victim.clear()
+            self.victim.extend(exile)
+            for id in self.victim:
+                self.activePlayer.pop(id)
             self.broadcast(None, "the exile player is: %s" %
                            ", ".join(str(s) for s in self.victim))
         status = self.checkStatus()
-        if status != 0:
+        if status:
             return status
         # ask if the victim want to use the skill
-        if len(self.victim) > 0:
+        while self.victim:  # 极端情况可能会开两次枪
             self.victimSkill()
+        status = self.checkStatus()
+        return status
 
-    def setSeq(self, startpoint: int, clockwise: bool):
+    def setSeq(self, startpoint: int, clockwise: bool) -> List[int]:
         """
 
         - startpoint: the person id to start with
@@ -508,7 +565,7 @@ class Game:
         for id in self.activePlayer:
             tempActive.append(id)
         if clockwise == False:
-            tempActive = tempActive.reverse()
+            tempActive.reverse()
         for i in range(0, len(tempActive)):
             if i > tempActive.index(startpoint):
                 seq.append(tempActive.pop(i))
@@ -537,7 +594,6 @@ class Game:
         victimByWitch: int = 0
         predictorTarget: int = 0
         guardTarget: int = 0
-        hunterStatus: bool = True
 
         # ANCHOR: Wolves wake up
         # Vote for a player to kill
@@ -545,8 +601,8 @@ class Game:
         wolfThread: List[ReceiveThread] = []
 
         for player in self.activePlayer:
-            if isinstance(player, (Wolf, KingOfWerewolves, WhiteWerewolf)):
-                ret: Optional[ReceiveThread] = player.kill()
+            if isinstance(self.activePlayer[player], (Wolf, KingOfWerewolves, WhiteWerewolf)):
+                ret: Optional[ReceiveThread] = self.activePlayer[player].kill()
                 if ret is not None:
                     wolfThread.append(ret)
         if wolfThread:  # Only used for indention
@@ -554,12 +610,12 @@ class Game:
                 thread.join()
 
             vote: List[int] = []
-            packetContent: dict = {}
+            packetContent: Dict[str, Any] = {}
 
             for thread in wolfThread:
                 if thread.getResult() is None:
                     continue
-                packetContent: dict = thread.getResult().content
+                packetContent = thread.getResult().content
                 if packetContent['vote'] and packetContent['candidate'] in self.activePlayer:
                     vote.append(packetContent['candidate'])
 
@@ -581,11 +637,11 @@ class Game:
         predictor: Optional[Predictor] = None
 
         for player in self.activePlayer:
-            if isinstance(player, Predictor):
-                predictor = player
-                predictorThread = player.skill()
-        if predictor is not None and predictorThread is not None:
-            packetContent: dict = predictorThread.getResult().content
+            if isinstance(self.activePlayer[player], Predictor):
+                predictor = self.activePlayer[player]
+                predictorThread = self.activePlayer[player].skill()
+        if predictor is not None and predictorThread is not None and predictorThread.getResult() is not None:
+            packetContent: Dict[str, Any] = predictorThread.getResult().content
             if packetContent['action'] and packetContent['target'] in self.activePlayer:
                 predictorTarget = packetContent['target']
 
@@ -610,15 +666,17 @@ class Game:
         witch: Optional[Witch] = None
 
         for player in self.activePlayer:
-            if isinstance(player, Witch):
-                witch = player
-                witchThread = player.skill(killed=victimByWolf)
-                # witchThread.join()
-        if witch is not None and witchThread is not None:
+            if isinstance(self.activePlayer[player], Witch):
+                witch = self.activePlayer[player]
+                witchThread = witch.skill(
+                    killed=victimByWolf
+                )
+                witchThread.join()
+        if witch is not None and witchThread is not None and witchThread.getResult() is not None:
             """
             Got the response
             """
-            packetContent: dict = witchThread.getResult().content
+            packetContent: Dict[int, Any] = witchThread.getResult().content
             if packetContent['action']:
                 """
                 If the witch takes the action
@@ -643,10 +701,10 @@ class Game:
         guard: Optional[Guard] = None
 
         for player in self.activePlayer:
-            if isinstance(player, Guard):
-                guard = player
-                guardThread = player.skill()
-        if guard is not None and guardThread is not None:
+            if isinstance(self.activePlayer[player], Guard):
+                guard = self.activePlayer[player]
+                guardThread = self.activePlayer[player].skill()
+        if guard is not None and guardThread is not None and guardThread.getResult is not None:
             packetContent: dict = guardThread.getResult().content
             if packetContent['action']:
                 if packetContent['target'] in self.activePlayer:
@@ -686,6 +744,18 @@ class Game:
 
         self.night += 1
 
+    def launch(self):
+        assert self.running, "The game must be activated!"
+        while not self.status:
+            self.nightTime()
+            if self.day == 0:
+                self.electPolice()
+            self.dayTime()
+        self.broadcast(
+            None,
+            "The villagers won" if self.status == 1 else "The wolves won"
+        )
+
 
 class IncomingConnection(Thread):
     """
@@ -704,3 +774,45 @@ class IncomingConnection(Thread):
         receivingSocket.bind(self.address)
         while self.game.playerCount != len(self.game.activePlayer):
             self.game.addPlayer(_recv(receivingSocket))
+
+
+class killableThread(Thread):
+    """
+    A thread class extending threading.Thread, provides a kill() method to stop the thread and a getResult() method to get the return value of the thread.
+    """
+
+    def __init__(self, func: Callable, **kwargs):
+        super().__init__()
+        self.func: Callable = func
+        self.funcArg: dict = kwargs
+        self.result: Any = None
+
+    def run(self):
+        """
+        Executes the function here
+        """
+        self.result = self.func(**self.funcArg)
+
+    def get_id(self):
+        """
+        Get the id of the thread
+        """
+        if hasattr(self, '_thread_id'):
+            return self._thread_id
+        for id, thread in threading._active.items():
+            if thread is self:
+                return id
+
+    def kill(self):
+        """
+        Stops the thread
+        """
+        thread_id = self.get_id()
+        res = ctypes.pythonapi.PyThreadState_SetAsyncExc(thread_id,
+                                                         ctypes.py_object(SystemExit))
+        if res > 1:
+            ctypes.pythonapi.PyThreadState_SetAsyncExc(thread_id, 0)
+            print('Exception raise failure')
+
+    def getResult(self):
+        return self.result
