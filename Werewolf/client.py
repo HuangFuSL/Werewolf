@@ -119,9 +119,9 @@ def ProcessPacket(toReply: ChunckedData, context: dict) -> int:
     """
     Ask for user input and build the corresponding packet.
     """
-    if context['isalive'] == False and toReply['type'] != -8:
+    if context['isalive'] == False and toReply.type != -8:
         return -2
-    if toReply['type'] == -1:
+    if toReply.type == -1:
         """
         -1: {
             'seat': int,                    # 分配的座位号
@@ -145,7 +145,7 @@ def ProcessPacket(toReply: ChunckedData, context: dict) -> int:
         print("Your identity is '%s'" %
               (convertToString(context['identity']), )
               )
-    elif toReply['type'] == -3:
+    elif toReply.type == -3:
         """
         -3: {
             'action': bool,                 # 玩家是否执行操作（若回送，指玩家作用是否成功）
@@ -156,7 +156,7 @@ def ProcessPacket(toReply: ChunckedData, context: dict) -> int:
         print("The person you checked is %s." %
               ("good" if toReply['action'] else "bad", )
               )
-    elif toReply['type'] == 3:
+    elif toReply.type == 3:
         """
         3: {
             # 'identityLimit': tuple,         # 能收到消息的玩家身份列表
@@ -238,14 +238,14 @@ def ProcessPacket(toReply: ChunckedData, context: dict) -> int:
             )
             sendingThread.start()
 
-    elif toReply['type'] == 4:
+    elif toReply.type == 4:
         """
         4: {
             'content': str,             # 要公布的消息
         },
         """
         print(toReply['content'])
-    elif toReply['type'] == 5:
+    elif toReply.type == 5:
         """
         5: {
             'content': str                 # 自由交谈的内容
@@ -253,7 +253,7 @@ def ProcessPacket(toReply: ChunckedData, context: dict) -> int:
         },
         """
         print(toReply['content'])
-    elif toReply['type'] == 6:
+    elif toReply.type == 6:
         """
         6: {'timeLimit': int},              # 时间限制
         """
@@ -276,7 +276,7 @@ def ProcessPacket(toReply: ChunckedData, context: dict) -> int:
             target=packetSend.send, args=(sock, getServerAddr(context))
         )
         sendingThread.start()
-    elif toReply['type'] == 7:
+    elif toReply.type == 7:
         """
         7: {
             'prompt': str
@@ -302,14 +302,14 @@ def ProcessPacket(toReply: ChunckedData, context: dict) -> int:
         )
         sendingThread.start()
 
-    elif toReply['type'] == 8:
+    elif toReply.type == 8:
         """
         8: {},
         """
         context['isalive'] = False
         return -2
 
-    elif toReply['type'] == -8:
+    elif toReply.type == -8:
         """
         -8: {
             'result': bool  # The result of the game

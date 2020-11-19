@@ -99,6 +99,7 @@ class Game:
         ), "The identity list must be initialized"  # The identity list should not be empty
         assert self.listener.is_alive() == False, "There is already an active listener"
         self.listener.start()
+        self.listener.join()
 
     def activate(self):
         """
@@ -223,18 +224,16 @@ class Game:
         None
         """
         assert self.running is False
-        assert data.content["type"] == 1  # The packet type must match
+        assert data.type == 1  # The packet type must match
         # `identityList` must be initialized
         assert len(self.identityList) != 0
         # Read the content of the packet
         # Verify the seat is available
         client: Tuple[str, int] = data.getAddr("source")
-        id: int = data.content["chosenSeat"]
         # Randomly allocate seat when the seat chosen is already taken
-        if id not in range(1, self.playerCount + 1) or id in self.activePlayer.keys():
+        id = randint(1, self.playerCount)
+        while id in self.activePlayer.keys():
             id = randint(1, self.playerCount)
-            while id in self.activate.keys():
-                id = randint(1, self.playerCount)
         server: Tuple[str, int] = (data.getAddr(
             "destination")[0], self.ports[id])
         newplayer = self.identityList.pop()(id=id, server=server, client=client)
@@ -242,12 +241,14 @@ class Game:
         self.allPlayer[id] = newplayer
         # Send response
         identityCode: int = getIdentityCode(self.activePlayer[id])
+        # REVIEW: Print message here.
+        print("The player %d get the %d identity" % (id, identityCode))
         packet: Dict[str, Any] = getBasePacket(server, client)
         packet["seat"] = id
         packet["identity"] = identityCode
         sendingThread: Thread = Thread(
             target=ChunckedData(-1, **
-                                packet).send, args=(self.activePlayer[id].socket,)
+                                packet).send, args=(self.activePlayer[id].socket, client)
         )
         sendingThread.start()
 
@@ -588,6 +589,9 @@ class Game:
         """
         # SECTION: Implement the game logic at night
 
+        # REVIEW
+        print("Night")
+
         # Parameters:
         victimByWolf: int = 0
         victimByWitch: int = 0
@@ -653,7 +657,7 @@ class Game:
             packetContent['target'] = -1024
             sendingThread: Thread = Thread(
                 target=ChunckedData(-3, **
-                                    packetContent).send, args=(predictor.socket,)
+                                    packetContent).send, args=(predictor.socket, predictor.client)
             )
             sendingThread.start()
             del packetContent
@@ -744,6 +748,12 @@ class Game:
 
         self.night += 1
 
+    def preLaunch(self, addr: Tuple[str, int]):
+        while self.identityList:
+            ReceiveThread = IncomingConnection(addr, self)
+            ReceiveThread.start()
+            ReceiveThread.join()
+
     def launch(self):
         assert self.running, "The game must be activated!"
         while not self.status:
@@ -772,7 +782,10 @@ class IncomingConnection(Thread):
     def run(self):
         receivingSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         receivingSocket.bind(self.address)
+        # REVIEW
+        print(self.address)
         while self.game.playerCount != len(self.game.activePlayer):
+            print("Listening for additional player...")
             self.game.addPlayer(_recv(receivingSocket))
 
 

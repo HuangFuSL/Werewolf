@@ -42,10 +42,10 @@ _checkParam = {
     3: {
         # 'identityLimit': tuple,         # 能收到消息的玩家身份列表
         # 'playerNumber': int,          # 目的玩家编号（deprecated）
-        'isnight': bool,                # 是否是晚上
+        'iskill': bool,                # 是否是晚上
         'format': str,                  # 玩家应当输入的格式，示例 "int"
         'prompt': str,                  # 输入提示
-        'timeLimit': int                # 时间限制
+        'timeLimit': float                # 时间限制
     },
     -3: {
         'action': bool,                 # 玩家是否执行操作（若回送，指玩家作用是否成功）

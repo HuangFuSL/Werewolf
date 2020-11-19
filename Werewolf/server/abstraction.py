@@ -7,7 +7,7 @@ from ..WP.api import ChunckedData, ReceiveThread, TimeLock
 defaultTimeout: float = 120.0  # 超时时间，是各方法的默认参数
 
 
-def setdefault_timeout(timeout=None) -> float:
+def default_timeout(timeout=None) -> float:
     """
     Get or set the default timeout value.
 
@@ -126,7 +126,8 @@ class Person():
         packet = self._getBasePacket()
         packet['content'] = content
         packetSend = ChunckedData(4, **packet)
-        sendingThread = Thread(target=packetSend.send, args=(self.socket, ))
+        sendingThread = Thread(target=packetSend.send,
+                               args=(self.socket, self.client))
         sendingThread.start()
 
     def vote(self, timeout: float = defaultTimeout) -> ReceiveThread:
@@ -144,7 +145,8 @@ class Person():
         packet = self._getBasePacket()
         packet['prompt'] = "Please vote for the people to be banished:"
         packetSend = ChunckedData(7, **packet)
-        sendingThread = Thread(target=packetSend.send, args=(self.socket, ))
+        sendingThread = Thread(target=packetSend.send,
+                               args=(self.socket, self.client))
         sendingThread.start()
         return self._startListening(timeout=timeout)
 
@@ -164,8 +166,9 @@ class Person():
         packet['format'] = 'bool'
         packet['prompt'] = 'Do you want to be the policeman?\nYou have %f seconds to decide.' % (
             timeout, )
-        packet['timeout'] = timeout
-        packetSend = ChunckedData(3, iskill=False, **packet)
+        packet['timeLimit'] = timeout
+        packet['iskill'] = False
+        packetSend = ChunckedData(3, **packet)
         sendingThread = Thread(target=packetSend.send, args=(self.socket,))
         sendingThread.start()
         return self._startListening(timeout=timeout)
@@ -187,7 +190,7 @@ class Person():
             packet['prompt'] = "Please choose the sequence: True for clockwise and False for anti-clockwise"
             packetSend = ChunckedData(7, **packet)
             sendingThread = Thread(
-                target=packetSend.send, args=(self.socket, ))
+                target=packetSend.send, args=(self.socket, self.client))
             sendingThread.start()
             return self._startListening(timeout=timeout)
         else:
@@ -224,7 +227,7 @@ class Person():
             packet['prompt'] = "Please vote for the police:"
             packetSend = ChunckedData(7, **packet)
             sendingThread = Thread(
-                target=packetSend.send, args=(self.socket, ))
+                target=packetSend.send, args=(self.socket, self.client))
             sendingThread.start()
             return self._startListening(timeout=timeout)
         else:
@@ -245,7 +248,8 @@ class Person():
         packet = self._getBasePacket()
         packet['timeLimit'] = timeout
         packetSend = ChunckedData(6, **packet)
-        sendingThread = Thread(target=packetSend.send, args=(self.socket, ))
+        sendingThread = Thread(target=packetSend.send,
+                               args=(self.socket, self.client))
         sendingThread.start()
         return self._startListening(timeout=timeout)
 
@@ -253,7 +257,7 @@ class Person():
 #       packet = self._getBasePacket()
 #       packet['description'] = '\n'.join(data)
 #       packet['parameter'] = tuple()
-#       sendingThread = Thread(target=packetSend.send(), args=(self.socket, ))
+#       sendingThread = Thread(target=packetSend.send(), args=(self.socket, self.client))
 #       sendingThread.start()
 
     def onDead(self, withFinalWords: bool, timeouts: float):
@@ -278,7 +282,7 @@ class Person():
             packet['prompt'] = "Please select the player you want to inherit the police:"
             packetSend = ChunckedData(7, **packet)
             sendingThread = Thread(
-                target=packetSend.send, args=(self.socket, ))
+                target=packetSend.send, args=(self.socket, self.client))
             sendingThread.start()
             ret.append(self._startListening(timeout=timeouts))
         else:
@@ -288,7 +292,7 @@ class Person():
             packet['timeLimit'] = timeouts
             packetSend = ChunckedData(6, **packet)
             sendingThread = Thread(
-                target=packetSend.send, args=(self.socket, ))
+                target=packetSend.send, args=(self.socket, self.client))
             sendingThread.start()
             ret.append(self._startListening(timeout=timeouts))
         else:
@@ -365,23 +369,26 @@ class Wolf(Person):
         packet['format'] = "int"
         packet['prompt'] = "Please select a person to kill.\nYou have %f seconds to decide with your partner" % (
             timeout, )
-        packet['timeout'] = timeout
-        packetSend = ChunckedData(3, iskill=True, **packet)
-        sendingThread = Thread(target=packetSend.send, args=(self.socket, ))
+        packet['timeLimit'] = timeout
+        packet['iskill'] = True
+        packetSend = ChunckedData(3, **packet)
+        sendingThread = Thread(target=packetSend.send,
+                               args=(self.socket, self.client))
         sendingThread.start()
         timer = TimeLock(timeout)
         timer.setDaemon(True)
         timer.start()
         recv: ReceiveThread = self._startListening(timeout)
-        recv.start()
+        # recv.start()
         while not timer.getStatus():
             recv.join()
             dataRecv: Optional[ChunckedData] = recv.getResult()
+            recv: ReceiveThread = self._startListening(timeout)
             if dataRecv is None or dataRecv.content['type'] == -3:
                 return recv
             elif dataRecv.content['type'] == 5:
                 packet: dict = dataRecv.content.copy()
-                recv.start()
+                # recv.start()
                 packet.pop('type')
                 for peer in self.peerList:
                     packet.update(**peer._getBasePacket())
@@ -435,9 +442,11 @@ class SkilledPerson(Person):
         packet = self._getBasePacket()
         packet['format'] = format
         packet['prompt'] = prompt
-        packet['timeout'] = timeout
-        packetSend = ChunckedData(3, iskill=False, **packet)
-        sendingThread = Thread(target=packetSend.send, args=(self.socket, ))
+        packet['timeLimit'] = timeout
+        packet['iskill'] = False
+        packetSend = ChunckedData(3, **packet)
+        sendingThread = Thread(target=packetSend.send,
+                               args=(self.socket, self.client))
         sendingThread.start()
         return self._startListening(timeout)
 

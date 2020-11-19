@@ -64,7 +64,10 @@ class ChunckedData(object):
     def _decompress(data: bytearray) -> str:
         buffer: BytesIO = BytesIO(bytes(data))
         with gzip.GzipFile(mode='rb', fileobj=buffer) as output:
-            return str(output.read())
+            # REVIEW
+            ret = output.read().decode(encoding="utf-8")
+            print(ret)
+            return ret
 
     def __init__(self, packetType: int, **kwargs: Any):
         """
@@ -113,16 +116,25 @@ class ChunckedData(object):
     def toBytesArray(self) -> bytearray:
         c = self.content.copy()
         c['type'] = self.type
+        # REVIEW
+        print(json.dumps(c))
         return self._compress(json.dumps(c))
 
     def send(self, connection: socket.socket, dest: Tuple[Any, Any]):
-        connection.connect(dest)
+        try:
+            connection.connect(dest)
+        except:
+            pass
         connection.send(bytes(self.toBytesArray()))
 
 
 def _recv(connection: socket.socket) -> ChunckedData:
     connection.listen(5)
+    # REVIEW
+    print("Waiting for connection...")
     c = connection.accept()[0]
+    # REVIEW
+    print("Client connected.")
     ret = ChunckedData(0, rawData=c.recv(16384))
     c.close()
     return ret
@@ -140,6 +152,7 @@ class ReceiveThread(threading.Thread):
     def run(self):
         if not self.timeout:
             self.result = _recv(self.connection)
+            print(self.result)
         else:
             dest: ReceiveThread = ReceiveThread(self.connection)
             dest.setDaemon(True)
@@ -150,10 +163,11 @@ class ReceiveThread(threading.Thread):
                 self.exitcode = 1
                 self.exception = ReceiveTimeoutError(self.timeout)
                 self.exc_traceback = str(self.exception)
+        self.connection.close()
 
     def getResult(self) -> Optional[ChunckedData]:
         try:
-            assert not isinstance(self.exception, ReceiveTimeoutError)
+            assert self.result is not None
             return self.result
         except AssertionError:
             raise self.exception
@@ -180,6 +194,7 @@ class TimeLock(threading.Thread):
     """
 
     def __init__(self, timeout: float):
+        super().__init__()
         self.end = False
         self.timeout = timeout
 
