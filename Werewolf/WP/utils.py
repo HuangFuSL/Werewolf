@@ -58,10 +58,11 @@ _checkParam = {
         'content': str                 # 自由交谈的内容
         # 'type': tuple                   # 能收到消息的身份列表，空列表指全部玩家
     },
-    6: {'timeLimit': int},              # 时间限制
+    6: {'timeLimit': float},              # 时间限制
     -6: {'content': str},               # 发送的消息
     7: {
-        'prompt': str
+        'prompt': str,
+        'timeLimit': float
     },                   # 当服务器第一次发送时，指是否可以投票，当第二次发送时，指投票是否有效
     -7: {
         'vote': bool,                   # 是否投票

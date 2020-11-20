@@ -120,23 +120,12 @@ class ChunckedData(object):
         print(json.dumps(c))
         return self._compress(json.dumps(c))
 
-    def send(self, connection: socket.socket, dest: Tuple[Any, Any]):
-        try:
-            connection.connect(dest)
-        except:
-            pass
+    def send(self, connection: socket.socket):
         connection.send(bytes(self.toBytesArray()))
 
 
 def _recv(connection: socket.socket) -> ChunckedData:
-    connection.listen(5)
-    # REVIEW
-    print("Waiting for connection...")
-    c = connection.accept()[0]
-    # REVIEW
-    print("Client connected.")
-    ret = ChunckedData(0, rawData=c.recv(16384))
-    c.close()
+    ret = ChunckedData(0, rawData=connection.recv(16384))
     return ret
 
 
@@ -152,7 +141,6 @@ class ReceiveThread(threading.Thread):
     def run(self):
         if not self.timeout:
             self.result = _recv(self.connection)
-            print(self.result)
         else:
             dest: ReceiveThread = ReceiveThread(self.connection)
             dest.setDaemon(True)
@@ -163,16 +151,9 @@ class ReceiveThread(threading.Thread):
                 self.exitcode = 1
                 self.exception = ReceiveTimeoutError(self.timeout)
                 self.exc_traceback = str(self.exception)
-        self.connection.close()
 
     def getResult(self) -> Optional[ChunckedData]:
-        try:
-            assert self.result is not None
-            return self.result
-        except AssertionError:
-            raise self.exception
-        except:
-            return None
+        return self.result
 
 
 class TimeLock(threading.Thread):

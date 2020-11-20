@@ -60,11 +60,13 @@ class Game:
         self.allPlayer: Dict[int, Any] = {}
         self.activePlayer: Dict[int, Any] = {}
         self.listeningAddr: Tuple[str, int] = (ip, port)
-        self.ports: List[int] = list(range(port + 1, port + playerCount + 2))
+        self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.socket.bind(self.listeningAddr)
+        self.socket.listen(10)
         self.running: bool = False
         self.identityList: List[Any] = []
         self.listener: IncomingConnection = IncomingConnection(
-            self.listeningAddr, self)
+            self.socket, self)
         # Further initialization
         self.listener.setName("Incoming connection receiver")
 
@@ -78,7 +80,6 @@ class Game:
         self.hunterStatus: bool = True
         self.kingofwolfStatus: bool = True
         # Verbose
-        print("Server port: ", ", ".join([str(_) for _ in self.ports]))
 
     def startListening(self):
         """
@@ -211,7 +212,7 @@ class Game:
                 i + 1
         shuffle(self.identityList)
 
-    def addPlayer(self, data: ChunckedData):
+    def addPlayer(self, connection: socket.socket, data: ChunckedData):
         """
         The server add a player to game after receiving a choose seat request.
 
@@ -229,26 +230,24 @@ class Game:
         assert len(self.identityList) != 0
         # Read the content of the packet
         # Verify the seat is available
-        client: Tuple[str, int] = data.getAddr("source")
         # Randomly allocate seat when the seat chosen is already taken
         id = randint(1, self.playerCount)
         while id in self.activePlayer.keys():
             id = randint(1, self.playerCount)
-        server: Tuple[str, int] = (data.getAddr(
-            "destination")[0], self.ports[id])
-        newplayer = self.identityList.pop()(id=id, server=server, client=client)
+        newplayer = self.identityList.pop()(id=id, connection=connection)
         self.activePlayer[id] = newplayer
         self.allPlayer[id] = newplayer
         # Send response
         identityCode: int = getIdentityCode(self.activePlayer[id])
         # REVIEW: Print message here.
         print("The player %d get the %d identity" % (id, identityCode))
-        packet: Dict[str, Any] = getBasePacket(server, client)
+        packet: Dict[str, Any] = getBasePacket(
+            newplayer.server, newplayer.client)
         packet["seat"] = id
         packet["identity"] = identityCode
         sendingThread: Thread = Thread(
             target=ChunckedData(-1, **
-                                packet).send, args=(self.activePlayer[id].socket, client)
+                                packet).send, args=(self.activePlayer[id].socket,)
         )
         sendingThread.start()
 
@@ -280,7 +279,9 @@ class Game:
             recthread.join()
         candidate: List[int] = []
         for player, recthread in electionCandidate:
-            if recthread.getResult() is not None and recthread.getResult().content['action']:
+            if recthread.getResult() is not None and \
+                    recthread.getResult().content['action'] and \
+                    recthread.getResult().content['target']:
                 candidate.append(player)
         current: ReceiveThread
 
@@ -296,15 +297,21 @@ class Game:
                 current.join()
                 if current.getResult() is not None:
                     self.broadcast(
-                        player, current.getResult().content['content']
+                        player,
+                        "Player %d said" % (player,) +
+                        current.getResult().content['content']
                     )
 
             # Ask for vote
             voteThread: List[ReceiveThread] = []
+            thread: Optional[ReceiveThread] = None
             for player in self.activePlayer:
                 if player in candidate:
                     continue  # Candidate cannot vote
-                voteThread.append(self.activePlayer[player].voteForPolice)
+                thread = self.activePlayer[player].voteForPolice()
+                if thread:
+                    voteThread.append(thread)
+            del thread
             for thread in voteThread:
                 thread.join()
 
@@ -533,14 +540,17 @@ class Game:
                 exile = [self.activePlayer[_] for _ in result]
 
         # announce the exile and check the game status
+        # REVIEW
+        print(self.activePlayer)
         if len(exile) == 0:
-            self.broadcast(None, "no one exile!")
+            self.broadcast(None, "No one exile!")
         else:
             del self.activePlayer[exile[0]]
             self.victim.clear()
             self.victim.extend(exile)
             for id in self.victim:
-                self.activePlayer.pop(id)
+                if id in self.activePlayer:
+                    self.activePlayer.pop(id)
             self.broadcast(None, "the exile player is: %s" %
                            ", ".join(str(s) for s in self.victim))
         status = self.checkStatus()
@@ -619,14 +629,14 @@ class Game:
                 if thread.getResult() is None:
                     continue
                 packetContent = thread.getResult().content
-                if packetContent['vote'] and packetContent['candidate'] in self.activePlayer:
-                    vote.append(packetContent['candidate'])
+                if packetContent['action'] and packetContent['target'] in self.activePlayer:
+                    vote.append(packetContent['target'])
 
             result: List[int] = getVotingResult(vote)
 
             # If there are more than 1 victim, randomly choose one
             shuffle(result)
-            victimByWolf = result[0]
+            victimByWolf = result[0] if result else 0
 
             del vote
             del packetContent
@@ -643,6 +653,8 @@ class Game:
             if isinstance(self.activePlayer[player], Predictor):
                 predictor = self.activePlayer[player]
                 predictorThread = self.activePlayer[player].skill()
+            if predictorThread:
+                predictorThread.join()
         if predictor is not None and predictorThread is not None and predictorThread.getResult() is not None:
             packetContent: Dict[str, Any] = predictorThread.getResult().content
             if packetContent['action'] and packetContent['target'] in self.activePlayer:
@@ -675,7 +687,8 @@ class Game:
                 witchThread = witch.skill(
                     killed=victimByWolf
                 )
-                witchThread.join()
+                if witchThread:
+                    witchThread.join()
         if witch is not None and witchThread is not None and witchThread.getResult() is not None:
             """
             Got the response
@@ -685,7 +698,9 @@ class Game:
                 """
                 If the witch takes the action
                 """
-                if not isinstance(self.activePlayer[packetContent['target']], Witch) or self.night == 0:
+                if packetContent['target'] == 0 or \
+                        not isinstance(self.activePlayer[packetContent['target']], Witch) or \
+                        self.night == 0:
                     """
                     The witch cannot save herself after the first night.
                     """
@@ -708,6 +723,8 @@ class Game:
             if isinstance(self.activePlayer[player], Guard):
                 guard = self.activePlayer[player]
                 guardThread = self.activePlayer[player].skill()
+            if guardThread:
+                guardThread.join()
         if guard is not None and guardThread is not None and guardThread.getResult is not None:
             packetContent: dict = guardThread.getResult().content
             if packetContent['action']:
@@ -724,18 +741,19 @@ class Game:
         # ANCHOR: Hunter wake up
         # The server checks the usablity of the skill
 
-        self.hunterStatus = not isinstance(
-            self.activePlayer[victimByWitch], Hunter
-        )
-        self.kingofwolfStatus = not isinstance(
-            self.activePlayer[victimByWitch], KingOfWerewolves
-        )
+        if victimByWitch in self.activePlayer:
+            self.hunterStatus = not isinstance(
+                self.activePlayer[victimByWitch], Hunter
+            )
+            self.kingofwolfStatus = not isinstance(
+                self.activePlayer[victimByWitch], KingOfWerewolves
+            )
 
         # ANCHOR: Return the value
         self.victim.clear()
-        if victimByWitch:
+        if victimByWitch in self.activePlayer:
             self.victim.append(victimByWitch)
-        if victimByWolf > 0:
+        if victimByWolf in self.activePlayer:
             self.victim.append(victimByWolf)
         shuffle(self.victim)
         for id in self.victim:
@@ -750,7 +768,7 @@ class Game:
 
     def preLaunch(self, addr: Tuple[str, int]):
         while self.identityList:
-            ReceiveThread = IncomingConnection(addr, self)
+            ReceiveThread = IncomingConnection(self.socket, self)
             ReceiveThread.start()
             ReceiveThread.join()
 
@@ -774,19 +792,22 @@ class IncomingConnection(Thread):
     `Establish` packets and `EstablishResp` packets are no longer used. The server sends the port information in this packet.
     """
 
-    def __init__(self, addr: Tuple[str, int], dest: Game):
+    def __init__(self, connection: socket.socket, dest: Game):
         super(IncomingConnection, self).__init__()
-        self.address: Tuple[str, int] = addr
+        self.socket = connection
         self.game: Game = dest
 
     def run(self):
-        receivingSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        receivingSocket.bind(self.address)
         # REVIEW
-        print(self.address)
         while self.game.playerCount != len(self.game.activePlayer):
+            # REVIEW
             print("Listening for additional player...")
-            self.game.addPlayer(_recv(receivingSocket))
+            c, addr = self.socket.accept()
+            # REVIEW
+            print(c.getpeername())
+            print(c.getsockname())
+            print("Client connected")
+            self.game.addPlayer(c, _recv(c))
 
 
 class killableThread(Thread):

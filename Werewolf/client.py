@@ -9,7 +9,7 @@ import socket
 from socket import AF_INET, SOCK_STREAM
 import sys
 from threading import Thread
-from typing import Any, Optional, Tuple, Union
+from typing import Any, Dict, Optional, Tuple, Union
 try:
     from .WP import ChunckedData, TimeLock, ReceiveThread
 except ImportError:
@@ -72,12 +72,6 @@ def getClientAddr(context: dict) -> Tuple[str, int]:
         context['clientAddr'],
         context['clientPort']
     )
-
-
-def getSocket(context: dict) -> socket.socket:
-    ret: socket.socket = socket.socket(AF_INET, SOCK_STREAM)
-    ret.bind(getClientAddr(context))
-    return ret
 
 
 class ReadInput(Thread):
@@ -181,6 +175,7 @@ def ProcessPacket(toReply: ChunckedData, context: dict) -> int:
             while timer.is_alive():
                 readThread = ReadInput("", str, toReply['timeLimit'])
                 readThread.setDaemon(True)
+                readThread.start()
                 readThread.join()
 
                 try:
@@ -210,9 +205,8 @@ def ProcessPacket(toReply: ChunckedData, context: dict) -> int:
                     packetType = -3
 
                 packetSend = ChunckedData(packetType, **basePacket)
-                sock = socket.socket(AF_INET, SOCK_STREAM)
                 sendingThread = Thread(
-                    target=packetSend.send, args=(sock, getServerAddr(context))
+                    target=packetSend.send, args=(context['socket'], )
                 )
                 sendingThread.start()
                 if (packetType == -3):
@@ -226,15 +220,15 @@ def ProcessPacket(toReply: ChunckedData, context: dict) -> int:
             readThread = ReadInput("", toReply['format'], toReply['timeLimit'])
             readThread.setDaemon(True)
             readThread.start()
+            readThread.join()
 
-            basePacket['action'] = True
             basePacket['target'] = readThread.getResult()
+            basePacket['action'] = readThread.getResult() >= 0
             packetType = -3
 
             packetSend = ChunckedData(packetType, **basePacket)
-            sock = socket.socket(AF_INET, SOCK_STREAM)
             sendingThread = Thread(
-                target=packetSend.send, args=(sock, getServerAddr(context))
+                target=packetSend.send, args=(context['socket'], )
             )
             sendingThread.start()
 
@@ -263,6 +257,7 @@ def ProcessPacket(toReply: ChunckedData, context: dict) -> int:
         readThread = ReadInput("", str, toReply['timeLimit'])
         readThread.setDaemon(True)
         readThread.start()
+        readThread.join()
         basePacket: dict = getBasePacket(context)
         if isinstance(readThread.getResult(), str):
             basePacket['content'] = readThread.getResult()
@@ -271,9 +266,8 @@ def ProcessPacket(toReply: ChunckedData, context: dict) -> int:
         packetType = -6
 
         packetSend = ChunckedData(packetType, **basePacket)
-        sock = socket.socket(AF_INET, SOCK_STREAM)
         sendingThread = Thread(
-            target=packetSend.send, args=(sock, getServerAddr(context))
+            target=packetSend.send, args=(context['socket'], )
         )
         sendingThread.start()
     elif toReply.type == 7:
@@ -282,9 +276,10 @@ def ProcessPacket(toReply: ChunckedData, context: dict) -> int:
             'prompt': str
         },
         """
-        readThread = ReadInput(toReply['prompt'], str, toReply['timeLimit'])
+        readThread = ReadInput(toReply['prompt'], int, toReply['timeLimit'])
         readThread.setDaemon(True)
         readThread.start()
+        readThread.join()
 
         basePacket: dict = getBasePacket(context)
         if type(readThread.getResult()) == int:
@@ -296,9 +291,8 @@ def ProcessPacket(toReply: ChunckedData, context: dict) -> int:
         packetType = -7
 
         packetSend = ChunckedData(packetType, **basePacket)
-        sock = socket.socket(AF_INET, SOCK_STREAM)
         sendingThread = Thread(
-            target=packetSend.send, args=(sock, getServerAddr(context))
+            target=packetSend.send, args=(context['socket'], )
         )
         sendingThread.start()
 
@@ -323,30 +317,26 @@ def ProcessPacket(toReply: ChunckedData, context: dict) -> int:
 
 
 def launchClient(argv: list):
-    if len(argv) >= 3:
-        context = {
-            "clientAddr": sys.argv[1],  # TODO: IP地址考虑去掉
-            "clientPort": int(sys.argv[2]),  # TODO: 改成随机分配的端口
-            "isalive": True
-        }
-    else:
-        context = {
-            "clientAddr": input("Please enter the IP address of the client:\n"),
-            "clientPort": int(input("Please enter the port of the client:\n")),
-            "isalive": True
-        }
+    context: Dict[str, Any] = {'isalive': True}
     context["serverAddr"] = input(
         "Please enter the IP address of the server:\n")
-    context['serverPort'] = int(
-        input("Please enter the port of the server:\n"))
-    context['publicPort'] = context['serverPort']
+    if not context["serverAddr"]:
+        context["serverAddr"] = "localhost"
+    try:
+        context['serverPort'] = int(
+            input("Please enter the port of the server:\n"))
+    except:
+        context['serverPort'] = 21567
+    sock = socket.socket(AF_INET, SOCK_STREAM)
+    sock.connect(getServerAddr(context=context))
+    context['socket'] = sock
+    context['serverAddr'], context['serverPort'] = sock.getpeername()
+    context['clientAddr'], context['clientPort'] = sock.getsockname()
+
     basePacket: dict = getBasePacket(context)
     packetSend = ChunckedData(1, **basePacket)
-    sock = socket.socket(AF_INET, SOCK_STREAM)
-    sendingThread = Thread(
-        target=packetSend.send, args=(sock, getServerAddr(context))
-    )
-    receivingThread = ReceiveThread(getSocket(context), 120)
+    sendingThread = Thread(target=packetSend.send, args=(sock,))
+    receivingThread = ReceiveThread(sock, 120)
     receivingThread.start()
     sendingThread.start()
     receivingThread.join()
@@ -358,7 +348,7 @@ def launchClient(argv: list):
         try:
             assert curPacket is not None, "Lost connection to the server."
             ret = ProcessPacket(curPacket, context)
-            receivingThread = ReceiveThread(getSocket(context), 180)
+            receivingThread = ReceiveThread(sock, 180)
             receivingThread.start()
             receivingThread.join()
             curPacket = receivingThread.getResult()
@@ -374,7 +364,7 @@ def launchClient(argv: list):
                 packetSend = ChunckedData(9, **basePacket)
                 sock = socket.socket(AF_INET, SOCK_STREAM)
                 sendingThread = Thread(
-                    target=packetSend.send, args=(sock, getServerAddr(context))
+                    target=packetSend.send, args=(sock, )
                 )
                 sendingThread.start()
 
