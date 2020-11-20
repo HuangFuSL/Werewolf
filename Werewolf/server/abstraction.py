@@ -171,7 +171,7 @@ class Person():
         sendingThread.start()
         return self._startListening(timeout=timeout)
 
-    def voteForPolice(self, timeout: float = defaultTimeout) -> Optional[ReceiveThread]:
+    def policeSetseq(self, timeout: float = defaultTimeout) -> Optional[ReceiveThread]:
         """
         Send a package to a player to vote for the police.
 
@@ -185,9 +185,11 @@ class Person():
         """
         if self.police:
             packet = self._getBasePacket()
-            packet['prompt'] = "Please choose the sequence: True for clockwise and False for anti-clockwise"
+            packet['prompt'] = "Please choose the sequence: True for clockwise and False for anti-clockwise:\n"
             packet['timeLimit'] = timeout
-            packetSend = ChunckedData(7, **packet)
+            packet['iskill'] = False
+            packet['format'] = "bool"
+            packetSend = ChunckedData(3, **packet)
             sendingThread = Thread(
                 target=packetSend.send, args=(self.socket, ))
             sendingThread.start()
@@ -209,7 +211,7 @@ class Person():
         """
         self.police = val
 
-    def policeSetseq(self, timeout: float = defaultTimeout) -> Optional[ReceiveThread]:
+    def voteForPolice(self, timeout: float = defaultTimeout) -> Optional[ReceiveThread]:
         """
         Send a package to the police to choose the sequence.
 
@@ -380,13 +382,15 @@ class Wolf(Person):
         timer.setDaemon(True)
         timer.start()
         recv: Optional[ReceiveThread] = None
+        recv = self._startListening(timeout)
         while not timer.getStatus():
-            recv = self._startListening(timeout)
-            if recv.getResult() is None or recv.getResult().type == -3:
+            if recv.getResult() is None:
+                continue
+            elif recv.getResult().type == -3:
                 return recv
             elif recv.getResult().type == 5:
                 packet: dict = recv.getResult().content.copy()
-                # recv.start()
+                recv = self._startListening(timeout)
                 packet.pop('type')
                 for peer in self.peerList:
                     packet.update(**peer._getBasePacket())
@@ -424,7 +428,7 @@ class SkilledPerson(Person):
         """
         self.used += increment
 
-    def skill(self, prompt: str = "", timeout: float = defaultTimeout, format=int) -> ReceiveThread:
+    def skill(self, prompt: str = "", timeout: float = defaultTimeout, format: str = "int") -> ReceiveThread:
         """
         Ask the player whether to use the skill
 

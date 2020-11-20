@@ -118,6 +118,16 @@ class Game:
         assert self.status == 0, "The game is already finished"
         assert self.day == 0 and self.night == 0
         self.running = True  # 激活游戏，不允许新的玩家进入
+        # Check the number of wolves.
+        wolves = []
+        for player in sorted(self.activePlayer.keys()):
+            if isinstance(self.activePlayer[player], Wolf):
+                wolves.append(player)
+        for wolf in wolves:
+            for wolf2 in wolves:
+                if wolf == wolf2:
+                    continue
+                self.activePlayer[wolf].setPeer(self.activePlayer[wolf2])
 
     def deactivate(self):
         self.running = False  # 游戏结束
@@ -139,7 +149,7 @@ class Game:
         - `1`: The game stops and the villagers win - the wolves are eliminated
         """
         numVillager, numSkilled, numWolf = 0, 0, 0
-        for player in self.activePlayer:
+        for player in sorted(self.activePlayer.keys()):
             if isinstance(self.activePlayer[player], Villager):
                 numVillager += 1
             elif isinstance(self.activePlayer[player], Wolf):
@@ -169,7 +179,7 @@ class Game:
 
         None
         """
-        for id in self.activePlayer:
+        for id in sorted(self.activePlayer.keys()):
             player = self.activePlayer[id]
             if player is srcPlayer:
                 continue
@@ -232,7 +242,7 @@ class Game:
         # Verify the seat is available
         # Randomly allocate seat when the seat chosen is already taken
         id = randint(1, self.playerCount)
-        while id in self.activePlayer.keys():
+        while id in sorted(self.activePlayer.keys()):
             id = randint(1, self.playerCount)
         newplayer = self.identityList.pop()(id=id, connection=connection)
         self.activePlayer[id] = newplayer
@@ -274,7 +284,7 @@ class Game:
         # Ask for election
         electionCandidate: List[Tuple[int, ReceiveThread]]
         electionCandidate = [(player, self.activePlayer[player].joinElection())
-                             for player in self.activePlayer]
+                             for player in sorted(self.activePlayer.keys())]
         for player, recthread in electionCandidate:
             recthread.join()
         candidate: List[int] = []
@@ -292,28 +302,33 @@ class Game:
 
             Loop variable: i - only a counter
             """
+            self.broadcast(None,
+                           "Election candidate: " +
+                           ", ".join([str(_) for _ in candidate])
+                           )
+
             for player in candidate:
                 current = self.activePlayer[player].speak()
                 current.join()
                 if current.getResult() is not None:
                     self.broadcast(
                         player,
-                        "Player %d said" % (player,) +
+                        "Player %d said: \t" % (player,) +
                         current.getResult().content['content']
                     )
 
             # Ask for vote
             voteThread: List[ReceiveThread] = []
-            thread: Optional[ReceiveThread] = None
-            for player in self.activePlayer:
+            thread2: Optional[ReceiveThread] = None
+            for player in sorted(self.activePlayer.keys()):
                 if player in candidate:
                     continue  # Candidate cannot vote
-                thread = self.activePlayer[player].voteForPolice()
-                if thread:
-                    voteThread.append(thread)
-            del thread
+                thread2 = self.activePlayer[player].voteForPolice()
+                if thread2:
+                    voteThread.append(thread2)
             for thread in voteThread:
                 thread.join()
+            del thread2
 
             # Get the result and count the vote
             vote: List[int] = []
@@ -323,7 +338,7 @@ class Game:
                     packetContent = thread.getResult().content
                 else:
                     continue
-                if packetContent['vote'] and packetContent['candidate'] in self.activePlayer:
+                if packetContent['vote'] and packetContent['candidate'] in sorted(self.activePlayer.keys()):
                     vote.append(packetContent['candidate'])
             result: List[int] = getVotingResult(vote)
 
@@ -359,7 +374,7 @@ class Game:
             victim = self.allPlayer[id]
             retMsg = victim.onDead(True if self.night == 1 or self.day ==
                                    self.night else default_timeout())
-            if retMsg[0] and retMsg[0].content['vote'] and retMsg[0].content['candidate'] in self.activePlayer:
+            if retMsg[0] and retMsg[0].content['vote'] and retMsg[0].content['candidate'] in sorted(self.activePlayer.keys()):
                 self.activePlayer[retMsg[0].content['candidate']] = True
             if retMsg[1]:
                 self.broadcast(None, retMsg[1].content['content'])
@@ -373,7 +388,7 @@ class Game:
                         packetContent = gunThread.getResult().content
                     else:
                         break
-                    if packetContent['action'] and packetContent['target'] in self.activePlayer:
+                    if packetContent['action'] and packetContent['target'] in sorted(self.activePlayer.keys()):
                         self.broadcast(None, "the player %d has been killed by the player %d"
                                        % (packetContent['target'], id))
                         self.activePlayer.pop(packetContent['target'])
@@ -413,6 +428,8 @@ class Game:
         - `1`: The game stops and the villagers win - the wolves are eliminated
         """
         # ANCHOR: Implement the game logic in daytime
+        self.day += 1
+        self.broadcast(None, "Day %d." % (self.day))
 
         startpoint: int = 0
         exile: List[int] = []
@@ -436,7 +453,7 @@ class Game:
         packetContent: Dict[str, Any] = {}
         policeID: int = 0
 
-        for player in self.activePlayer:
+        for player in sorted(self.activePlayer.keys()):
             """
             Find the police
             """
@@ -452,7 +469,7 @@ class Game:
             police = self.activePlayer[policeID]
             policeThread = police.policeSetseq()
             policeThread.join()
-            isClockwise = policeThread.getResult().content['clockwise'] \
+            isClockwise = policeThread.getResult().content['target'] \
                 if policeThread.getResult() is not None \
                 else True
 
@@ -474,11 +491,11 @@ class Game:
                     current = player.speak()
                     current.join()
                     self.broadcast(
-                        player, current.getResult().content['content'])
+                        player, "Player %d said: \t" % (id,) + current.getResult().content['content'])
 
             # Ask for vote
             voteThread: List[ReceiveThread] = []
-            for id in self.activePlayer:
+            for id in sorted(self.activePlayer.keys()):
                 if isinstance(self.activePlayer[id], Idiot) and self.activePlayer[id].used:
                     """
                     An idiot cannot vote
@@ -495,7 +512,7 @@ class Game:
                 policeVoteThread.join()
             if policeVoteThread is not None and policeVoteThread.getResult() is not None:
                 packetContent = policeVoteThread.getResult().content
-                if packetContent['vote'] and packetContent['candidate'] in self.activePlayer:
+                if packetContent['vote'] and packetContent['candidate'] in sorted(self.activePlayer.keys()):
                     policeVote = packetContent['candidate']
 
             # Get the result and count the vote
@@ -505,7 +522,7 @@ class Game:
                 if thread.getResult() is None:
                     continue
                 packetContent = thread.getResult().content
-                if packetContent['vote'] and packetContent['candidate'] in self.activePlayer:
+                if packetContent['vote'] and packetContent['candidate'] in sorted(self.activePlayer.keys()):
                     vote.append(packetContent['candidate'])
             result: List[int] = getVotingResult(vote, policeVote)
 
@@ -540,8 +557,6 @@ class Game:
                 exile = [self.activePlayer[_] for _ in result]
 
         # announce the exile and check the game status
-        # REVIEW
-        print(self.activePlayer)
         if len(exile) == 0:
             self.broadcast(None, "No one exile!")
         else:
@@ -549,7 +564,7 @@ class Game:
             self.victim.clear()
             self.victim.extend(exile)
             for id in self.victim:
-                if id in self.activePlayer:
+                if id in sorted(self.activePlayer.keys()):
                     self.activePlayer.pop(id)
             self.broadcast(None, "the exile player is: %s" %
                            ", ".join(str(s) for s in self.victim))
@@ -570,16 +585,19 @@ class Game:
 
         - return: seq: list[int]
         """
-        seq = []
-        tempActive = []
-        for id in self.activePlayer:
-            tempActive.append(id)
-        if clockwise == False:
-            tempActive.reverse()
-        for i in range(0, len(tempActive)):
-            if i > tempActive.index(startpoint):
-                seq.append(tempActive.pop(i))
-        seq += tempActive
+        seq, keys = [], list(sorted(self.activePlayer.keys()))
+        tempStart, tempEnd = [], []
+        cur = tempStart
+        if clockwise:
+            keys.reverse()
+        for id in keys:
+            cur.append(id)
+            if id == startpoint:
+                cur = tempEnd
+
+        tempStart.reverse()
+        tempEnd.reverse()
+        seq = tempStart + tempEnd
 
         return seq
 
@@ -599,8 +617,8 @@ class Game:
         """
         # SECTION: Implement the game logic at night
 
-        # REVIEW
-        print("Night")
+        self.night += 1
+        self.broadcast(None, "Night %d." % (self.night))
 
         # Parameters:
         victimByWolf: int = 0
@@ -613,7 +631,7 @@ class Game:
 
         wolfThread: List[ReceiveThread] = []
 
-        for player in self.activePlayer:
+        for player in sorted(self.activePlayer.keys()):
             if isinstance(self.activePlayer[player], (Wolf, KingOfWerewolves, WhiteWerewolf)):
                 ret: Optional[ReceiveThread] = self.activePlayer[player].kill()
                 if ret is not None:
@@ -629,7 +647,7 @@ class Game:
                 if thread.getResult() is None:
                     continue
                 packetContent = thread.getResult().content
-                if packetContent['action'] and packetContent['target'] in self.activePlayer:
+                if packetContent['action'] and packetContent['target'] in sorted(self.activePlayer.keys()):
                     vote.append(packetContent['target'])
 
             result: List[int] = getVotingResult(vote)
@@ -649,7 +667,7 @@ class Game:
         predictorThread: Optional[ReceiveThread] = None
         predictor: Optional[Predictor] = None
 
-        for player in self.activePlayer:
+        for player in sorted(self.activePlayer.keys()):
             if isinstance(self.activePlayer[player], Predictor):
                 predictor = self.activePlayer[player]
                 predictorThread = self.activePlayer[player].skill()
@@ -657,7 +675,7 @@ class Game:
                 predictorThread.join()
         if predictor is not None and predictorThread is not None and predictorThread.getResult() is not None:
             packetContent: Dict[str, Any] = predictorThread.getResult().content
-            if packetContent['action'] and packetContent['target'] in self.activePlayer:
+            if packetContent['action'] and packetContent['target'] in sorted(self.activePlayer.keys()):
                 predictorTarget = packetContent['target']
 
             # Notice: the server need to send a response here, and the packet type is -3
@@ -669,7 +687,7 @@ class Game:
             packetContent['target'] = -1024
             sendingThread: Thread = Thread(
                 target=ChunckedData(-3, **
-                                    packetContent).send, args=(predictor.socket, predictor.client)
+                                    packetContent).send, args=(predictor.socket, )
             )
             sendingThread.start()
             del packetContent
@@ -681,7 +699,7 @@ class Game:
         witchThread: Optional[ReceiveThread] = None
         witch: Optional[Witch] = None
 
-        for player in self.activePlayer:
+        for player in sorted(self.activePlayer.keys()):
             if isinstance(self.activePlayer[player], Witch):
                 witch = self.activePlayer[player]
                 witchThread = witch.skill(
@@ -707,7 +725,7 @@ class Game:
                     if packetContent['target'] == 0 and witch.used % 2 == 0:
                         victimByWolf *= -1  # wait for guard
                         witch.used += 1
-                    elif packetContent['target'] in self.activePlayer and witch.used < 2:
+                    elif packetContent['target'] in sorted(self.activePlayer.keys()) and witch.used < 2:
                         victimByWitch = packetContent['target']
                         witch.used += 2
             del packetContent
@@ -719,7 +737,7 @@ class Game:
         guardThread: Optional[ReceiveThread] = None
         guard: Optional[Guard] = None
 
-        for player in self.activePlayer:
+        for player in sorted(self.activePlayer.keys()):
             if isinstance(self.activePlayer[player], Guard):
                 guard = self.activePlayer[player]
                 guardThread = self.activePlayer[player].skill()
@@ -728,7 +746,7 @@ class Game:
         if guard is not None and guardThread is not None and guardThread.getResult is not None:
             packetContent: dict = guardThread.getResult().content
             if packetContent['action']:
-                if packetContent['target'] in self.activePlayer:
+                if packetContent['target'] in sorted(self.activePlayer.keys()):
                     guardTarget = packetContent['target']
                     # Cannot save the same player in 2 days.
                     if (guardTarget != self.guardedLastNight):
@@ -741,7 +759,7 @@ class Game:
         # ANCHOR: Hunter wake up
         # The server checks the usablity of the skill
 
-        if victimByWitch in self.activePlayer:
+        if victimByWitch in sorted(self.activePlayer.keys()):
             self.hunterStatus = not isinstance(
                 self.activePlayer[victimByWitch], Hunter
             )
@@ -751,9 +769,9 @@ class Game:
 
         # ANCHOR: Return the value
         self.victim.clear()
-        if victimByWitch in self.activePlayer:
+        if victimByWitch in sorted(self.activePlayer.keys()):
             self.victim.append(victimByWitch)
-        if victimByWolf in self.activePlayer:
+        if victimByWolf in sorted(self.activePlayer.keys()):
             self.victim.append(victimByWolf)
         shuffle(self.victim)
         for id in self.victim:

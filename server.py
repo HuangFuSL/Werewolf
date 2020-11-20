@@ -16,7 +16,7 @@ ADDR = (HOST, SERVER_PORT)
 
 tcpSerSock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
-playerCount: int = 3
+playerCount: int = 6
 # input the number of clients
 # playerCount: int = int(input('> '))
 # while (not(type(playerCount) == int and playerCount >= 6 and playerCount <= 12)):
@@ -29,7 +29,7 @@ game = Game(HOST, SERVER_PORT, playerCount)
 
 # input the identityList
 # identityList = eval(input('> '))
-identityList = {"Villager": 1, "Witch": 1, "Wolf": 1}
+identityList = {"Villager": 2, "Witch": 1, "Wolf": 2, "Predictor": 1}
 game.setIdentityList(**identityList)
 
 # wait for client connection and create the connection
