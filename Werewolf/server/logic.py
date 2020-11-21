@@ -373,8 +373,10 @@ class Game:
         for id in self.victim:
             victim = self.allPlayer[id]
             retMsg = victim.onDead(True if self.night == 1 or self.day ==
-                                   self.night else default_timeout())
-            if retMsg[0] and retMsg[0].content['vote'] and retMsg[0].content['candidate'] in sorted(self.activePlayer.keys()):
+                                   self.night else False, default_timeout())
+            if retMsg[0] and retMsg[0].getResult() and \
+                    retMsg[0].content['vote'] and \
+                    retMsg[0].content['candidate'] in sorted(self.activePlayer.keys()):
                 self.activePlayer[retMsg[0].content['candidate']] = True
             if retMsg[1]:
                 self.broadcast(None, retMsg[1].content['content'])
@@ -629,21 +631,31 @@ class Game:
         # ANCHOR: Wolves wake up
         # Vote for a player to kill
 
-        wolfThread: List[ReceiveThread] = []
+        wolfThread: List[KillableThread] = []
 
         for player in sorted(self.activePlayer.keys()):
             if isinstance(self.activePlayer[player], (Wolf, KingOfWerewolves, WhiteWerewolf)):
-                ret: Optional[ReceiveThread] = self.activePlayer[player].kill()
+                ret: Optional[KillableThread] = KillableThread(
+                    self.activePlayer[player].kill, **{}
+                )
+                ret.start()
                 if ret is not None:
                     wolfThread.append(ret)
         if wolfThread:  # Only used for indention
+            temp: List[ReceiveThread] = []
+
             for thread in wolfThread:
+                thread.join()
+                if thread.getResult():
+                    temp.append(thread.getResult())
+
+            for thread in temp:
                 thread.join()
 
             vote: List[int] = []
             packetContent: Dict[str, Any] = {}
 
-            for thread in wolfThread:
+            for thread in temp:
                 if thread.getResult() is None:
                     continue
                 packetContent = thread.getResult().content
@@ -660,6 +672,7 @@ class Game:
             del packetContent
             del result
         del wolfThread
+        del temp
 
         # ANCHOR: Predictor wake up
         # The predictor ask for a player's identity
@@ -794,9 +807,11 @@ class Game:
         assert self.running, "The game must be activated!"
         while not self.status:
             self.nightTime()
+            # TODO: Add parallel here
             if self.day == 0:
                 self.electPolice()
             self.dayTime()
+        # TODO: Add game result reply
         self.broadcast(
             None,
             "The villagers won" if self.status == 1 else "The wolves won"
@@ -828,7 +843,7 @@ class IncomingConnection(Thread):
             self.game.addPlayer(c, _recv(c))
 
 
-class killableThread(Thread):
+class KillableThread(Thread):
     """
     A thread class extending threading.Thread, provides a kill() method to stop the thread and a getResult() method to get the return value of the thread.
     """

@@ -523,14 +523,14 @@ class Witch(SkilledPerson):
             str(killed) if killed else "unknown", )
         packetSend = ChunckedData(5, **packet)
         if self.used == 0:  # Not ever used
-            prompt = """Please select a person to use the poison. If you want to save the killed player %d, enter "0".
+            prompt = """Please select a person to use the poison. If you want to save the killed player %d, enter "0". If you don't want do anything enter "-1".
 You have %f seconds to decide.""" % (killed, timeout)
         elif self.used == 1:  # Saved somebody.
             prompt = """Please select a person to use the poison. You have %f seconds to decide.""" % (
                 timeout, )
         elif self.used == 2:  # Killed somebody
-            prompt = """If you want to save the killed player %d, enter "0".\nYou have %f seconds to decide.""" % (killed,
-                                                                                                                   timeout)
+            prompt = """If you want to save the killed player %d, enter "0". If you don't want do anything enter "-1".\nYou have %f seconds to decide.""" % (killed,
+                                                                                                                                                             timeout)
         else:
             return None
         return SkilledPerson.skill(self, prompt, timeout, "int")
