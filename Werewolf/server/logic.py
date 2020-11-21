@@ -39,7 +39,7 @@ class Game:
     - ``
     """
 
-    def __init__(self, ipv4: str, ipv6: str, port: int, playerCount: int):
+    def __init__(self, playerCount: int, ipv4: str = '', ipv6: str = '', port: int = 21567):
         """
         Initializa a new game
 

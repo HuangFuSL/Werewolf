@@ -1,37 +1,19 @@
-import socket
-from time import ctime
-from threading import Thread
-
 from Werewolf.server.logic import Game
-from Werewolf.server.util import getIdentityCode, getBasePacket
-from random import shuffle, randint
-from Werewolf.server.abstraction import *
-from Werewolf.WP import api
 
+if __name__ == "__main__":
+    playerCount: int = 6
+    print('the number of players is: %d' % playerCount)
 
-HOST4 = ''
-HOST6 = ''
-SERVER_PORT = 21567
-BUFSIZ = 1024
-
-playerCount: int = 6
-# input the number of clients
-# playerCount: int = int(input('> '))
-# while (not(type(playerCount) == int and playerCount >= 6 and playerCount <= 12)):
-#     print('Please input the right number between 6 and 12!')
-#     playerCount = int(input('> '))
-print('the number of players is: %d' % playerCount)
-
-# initialize a new game
-game = Game(HOST4, HOST6, SERVER_PORT, playerCount)
-
-# input the identityList
-# identityList = eval(input('> '))
-identityList = {"Villager": 2, "Witch": 1, "Wolf": 2, "Predictor": 1}
-game.setIdentityList(**identityList)
-
-# wait for client connection and create the connection
-game.startListening()
-game.activate()
-# start the game
-game.launch()
+    # initialize a new game
+    game = Game(playerCount)
+    identityList = {
+        "Villager": 2,
+        "Witch": 1,
+        "Wolf": 2,
+        "Predictor": 1
+    }
+    game.setIdentityList(**identityList)
+    game.startListening()
+    game.activate()
+    # start the game
+    game.launch()
