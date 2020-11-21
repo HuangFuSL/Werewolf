@@ -631,6 +631,16 @@ class Game:
         # ANCHOR: Wolves wake up
         # Vote for a player to kill
 
+        wolves = []
+        for player in sorted(self.activePlayer.keys()):
+            if isinstance(self.activePlayer[player], Wolf):
+                wolves.append(player)
+
+        for wolf in wolves:
+            self.activePlayer[wolf].inform(
+                "Your peers are: " + ", ".join([str(_) for _ in wolves])
+            )
+
         wolfThread: List[KillableThread] = []
 
         for player in sorted(self.activePlayer.keys()):

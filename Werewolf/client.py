@@ -166,17 +166,18 @@ def ProcessPacket(toReply: ChunckedData, context: dict) -> int:
                         basePacket['target'] = ret
                         packetType = -3
 
-                    readThread = ReadInput("", str, toReply['timeLimit'])
-                    readThread.setDaemon(True)
-                    readThread.start()
-
                     packetSend = ChunckedData(packetType, **basePacket)
                     sendingThread = Thread(
                         target=packetSend.send, args=(context['socket'], )
                     )
                     sendingThread.start()
-                    if (packetType == -3):
+                    if packetType == -3:
+                        receivingThread.kill()
                         break
+                    elif packetType == 5:
+                        readThread = ReadInput("", str, toReply['timeLimit'])
+                        readThread.setDaemon(True)
+                        readThread.start()
 
             readThread.kill()
             receivingThread.kill()
