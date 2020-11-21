@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 """
 Created on Sat Nov  7 15:06:28 2020
-
 @author: lenovo-pc
 """
 
@@ -316,8 +315,7 @@ def launchClient(argv: list):
     ret: int = 0
     while ret ** 2 != 1:
         try:
-            if curPacket is None:
-                break
+            assert curPacket is not None, "Lost connection to the server."
             ret, temp = ProcessPacket(curPacket, context)
             if temp is None:
                 receivingThread = ReceiveThread(sock, 180)
