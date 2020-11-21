@@ -1,52 +1,35 @@
 # -*- coding: utf-8 -*-
 """
 Created on Sat Nov  7 15:06:28 2020
-
 @author: lenovo-pc
 """
 
+from Werewolf.WP.api import KillableThread
 import socket
-from socket import AF_INET, SOCK_STREAM
+from socket import AF_INET, AF_INET6, SOCK_STREAM
 import sys
-from threading import Thread
+from threading import Thread, ThreadError
 from typing import Any, Dict, Optional, Tuple, Union
 try:
-    from .WP import ChunckedData, TimeLock, ReceiveThread
+    from .WP import ChunckedData, TimeLock, ReceiveThread, ReadInput
 except ImportError:
-    from WP import ChunckedData, TimeLock, ReceiveThread
+    from WP import ChunckedData, TimeLock, ReceiveThread, ReadInput
 
 BUFSIZE = 1024
 ROLE = 0
 
 
-def getInput(prompt: str, inputType: type = str) -> Any:
-    flag: bool = True
-    temp: str
-    while flag:
-        try:
-            temp = input(prompt)
-        except EOFError:
-            return KeyboardInterrupt()
-        if inputType != str:
-            try:
-                return eval(temp)
-            except:
-                print("Input type mismatch!")
-        else:
-            return temp
-
-
 def convertToString(code: int) -> str:
     map = {
-        0: "Villager",
-        -1: "Wolf",
-        -2: "White Werewolf",
-        -3: "King of werewolves",
-        1: "Predictor",
-        2: "Witch",
-        3: "Hunter",
-        4: "Guard",
-        5: "Idiot"
+        0: "村民",
+        -1: "狼人",
+        -2: "白狼王",
+        -3: "狼王",
+        1: "预言家",
+        2: "女巫",
+        3: "猎人",
+        4: "守卫",
+        5: "白痴"
     }
     return map[code]
 
@@ -74,47 +57,14 @@ def getClientAddr(context: dict) -> Tuple[str, int]:
     )
 
 
-class ReadInput(Thread):
-    """
-    The input thread, will be interrupted by KeyBoardInterruption
-    """
-
-    def __init__(self, prompt: str, inputType: type = str, timeout: float = 0):
-        super().__init__()
-        self.inputType = inputType
-        self.timeout = timeout
-        self.result: Any = None
-        self.prompt = prompt
-
-    def run(self) -> Any:
-        if self.timeout == 0:
-            self.result = getInput(self.prompt, self.inputType)
-        else:
-            dest: ReadInput = ReadInput(self.prompt, self.inputType)
-            dest.setDaemon(True)
-            dest.start()
-            dest.join(self.timeout)
-            self.result = dest.getResult()
-            if self.result is None:
-                print("Input timeout.")
-
-    def getResult(self) -> Any:
-        """
-        Get the return value of the input
-
-        - inputType: if the input is correctly processed
-        - `None`: if timeout
-        - `KeyboardInterrupt`: if Ctrl-C is pressed
-        """
-        return self.result
-
-
-def ProcessPacket(toReply: ChunckedData, context: dict) -> int:
+def ProcessPacket(toReply: ChunckedData, context: dict) -> bool:
     """
     Ask for user input and build the corresponding packet.
     """
+    if toReply is None:
+        return False
     if context['isalive'] == False and toReply.type != -8:
-        return -2
+        return False
     if toReply.type == -1:
         """
         -1: {
@@ -135,8 +85,8 @@ def ProcessPacket(toReply: ChunckedData, context: dict) -> int:
         context['identity'] = toReply['identity']
         context['serverPort'] = toReply['srcPort']
         context['serverAddr'] = toReply['srcAddr']
-        print("Your seat number is %d" % (context['id'], ))
-        print("Your identity is '%s'" %
+        print("你的座位号是%d" % (context['id'], ))
+        print("你的身份是%s" %
               (convertToString(context['identity']), )
               )
     elif toReply.type == -3:
@@ -147,13 +97,13 @@ def ProcessPacket(toReply: ChunckedData, context: dict) -> int:
         },
         """
         assert context['identity'] == 1
-        print("The person you checked is %s." %
-              ("good" if toReply['action'] else "bad", )
+        print("你查验的玩家是%s" %
+              ("好人" if toReply['action'] else "狼人", )
               )
     elif toReply.type == 3:
         """
         3: {
-            # 'identityLimit': tuple,         # 能收到消息的玩家身份列表
+            # 'identityLimit': tuple,       # 能收到消息的玩家身份列表
             # 'playerNumber': int,          # 目的玩家编号（deprecated）
             'isnight': bool,                # 是否是晚上
             'format': str,                  # 玩家应当输入的格式，示例 "int"
@@ -166,65 +116,53 @@ def ProcessPacket(toReply: ChunckedData, context: dict) -> int:
 
         if context['identity'] < 0 and toReply['iskill']:
             print(toReply['prompt'])
-            timer = TimeLock(toReply['timeLimit'])
-            timer.setDaemon(True)
-            timer.start()
             ret: int = 0
             packetType: int
-            receivingThread = ReceiveThread(context['socket'], 120)
-            receivingThread.setDaemon(True)
-            receivingThread.start()
+            readThread = ReadInput("", str, toReply['timeLimit'])
+            readThread.setDaemon(True)
+            readThread.start()
+            readThread.join()
 
-            while timer.is_alive():
-                readThread = ReadInput("", str, toReply['timeLimit'])
-                readThread.setDaemon(True)
-                readThread.start()
-                readThread.join()
+            basePacket = getBasePacket(context)
 
-                if receivingThread.is_alive() == False and receivingThread.getResult() is not None:
-                    ProcessPacket(receivingThread.getResult(), context=context)
-                    receivingThread = ReceiveThread(context['socket'], 120)
-                    receivingThread.setDaemon(True)
-                    receivingThread.start()
-
-                try:
-                    ret = int(readThread.getResult())
-                except ValueError:
-                    """
-                    5: {
-                        'content': str                 # 自由交谈的内容
-                        # 'type': tuple                   # 能收到消息的身份列表，空列表指全部玩家
-                    },
-                    """
-                    if type(readThread.getResult()) == str:
-                        basePacket['content'] = readThread.getResult()
-                        packetType = 5
-                    else:
-                        basePacket['action'] = False
-                        packetType = -3
+            try:
+                ret = int(readThread.getResult())
+            except ValueError:
+                """
+                5: {
+                    'content': str                 # 自由交谈的内容
+                    # 'type': tuple                   # 能收到消息的身份列表，空列表指全部玩家
+                },
+                """
+                if type(readThread.getResult()) == str:
+                    basePacket['content'] = readThread.getResult()
+                    packetType = 5
                 else:
-                    """
-                    -3: {
-                        'action': bool,                 # 玩家是否执行操作（若回送，指玩家作用是否成功）
-                        'target': int                   # 玩家执行操作的目标
-                    },
-                    """
-                    basePacket['action'] = ret > 0
-                    basePacket['target'] = ret
+                    basePacket['action'] = False
                     packetType = -3
+            else:
+                """
+                -3: {
+                    'action': bool,                 # 玩家是否执行操作（若回送，指玩家作用是否成功）
+                    'target': int                   # 玩家执行操作的目标
+                },
+                """
+                basePacket['action'] = ret > 0
+                basePacket['target'] = ret
+                packetType = -3
 
-                packetSend = ChunckedData(packetType, **basePacket)
-                sendingThread = Thread(
-                    target=packetSend.send, args=(context['socket'], )
-                )
-                sendingThread.start()
-                if (packetType == -3):
-                    break
+            packetSend = ChunckedData(packetType, **basePacket)
+            sendingThread = Thread(
+                target=packetSend.send, args=(context['socket'], )
+            )
+            sendingThread.start()
+
+            return packetType == 5
 
         else:
             print(toReply['prompt'])
-            print("You have to enter a(n) %s" % (toReply['format'], ))
-            print('You have %d seconds to choose' % (toReply['timeLimit'], ))
+            print("你需要输入一个%s" % (toReply['format'], ))
+            print('你有%d秒的时间进行选择' % (toReply['timeLimit'], ))
 
             readThread = ReadInput("", toReply['format'], toReply['timeLimit'])
             readThread.setDaemon(True)
@@ -260,8 +198,8 @@ def ProcessPacket(toReply: ChunckedData, context: dict) -> int:
         """
         6: {'timeLimit': int},              # 时间限制
         """
-        print("It's your turn.")
-        print('You have %d seconds to speak' % (toReply['timeLimit'], ))
+        print("轮到你进行发言：")
+        print('你有%d秒的发言时间' % (toReply['timeLimit'], ))
 
         readThread = ReadInput("", str, toReply['timeLimit'])
         readThread.setDaemon(True)
@@ -305,47 +243,42 @@ def ProcessPacket(toReply: ChunckedData, context: dict) -> int:
         )
         sendingThread.start()
 
-    elif toReply.type == 8:
-        """
-        8: {},
-        """
-        context['isalive'] = False
-        return -2
-
-    elif toReply.type == -8:
-        """
-        -8: {
-            'result': bool  # The result of the game
-        }
-        """
-        if toReply['result'] == context['identity'] >= 0:
-            return 1
-        else:
-            return -1
-    return 0
+        return False
 
 
-def launchClient(argv: list):
-    context: Dict[str, Any] = {'isalive': True}
-    context["serverAddr"] = input(
-        "Please enter the IP address of the server:\n")
-    if not context["serverAddr"]:
-        context["serverAddr"] = "localhost"
+def packetProcessWrapper(curPacket: ChunckedData, context: dict):
     try:
-        context['serverPort'] = int(
-            input("Please enter the port of the server:\n"))
+        timer = TimeLock(curPacket['timeLimit'])
+        timer.setDaemon(True)
+        timer.start()
+        while not timer.getStatus() and ProcessPacket(curPacket, context):
+            print("Process Wrapper loop")
     except:
-        context['serverPort'] = 21567
-    sock = socket.socket(AF_INET, SOCK_STREAM)
-    sock.connect(getServerAddr(context=context))
-    context['socket'] = sock
-    context['serverAddr'], context['serverPort'] = sock.getpeername()
-    context['clientAddr'], context['clientPort'] = sock.getsockname()
+        ProcessPacket(curPacket, context)
+
+
+def launchClient(hostIP: str = "localhost", hostPort: int = 21567):
+    context: Dict[str, Any] = {'isalive': True}
+    context['serverAddr'] = hostIP
+    context['serverPort'] = hostPort
+    if ":" in hostIP:
+        sock = socket.socket(AF_INET6, SOCK_STREAM)
+        sock.connect(getServerAddr(context=context))
+        context['socket'] = sock
+        context['serverAddr'], context['serverPort'] = sock.getpeername()[:2]
+        context['clientAddr'], context['clientPort'] = sock.getsockname()[:2]
+    else:
+        sock = socket.socket(AF_INET, SOCK_STREAM)
+        sock.connect(getServerAddr(context=context))
+        context['socket'] = sock
+        context['serverAddr'], context['serverPort'] = sock.getpeername()
+        context['clientAddr'], context['clientPort'] = sock.getsockname()
 
     basePacket: dict = getBasePacket(context)
     packetSend = ChunckedData(1, **basePacket)
     sendingThread = Thread(target=packetSend.send, args=(sock,))
     receivingThread = ReceiveThread(sock, 120)
+    receivingThread.setDaemon(True)
     receivingThread.start()
     sendingThread.start()
     receivingThread.join()
@@ -353,11 +286,34 @@ def launchClient(argv: list):
 
     assert curPacket is not None, "Failed to connect to the server."
     ret: int = 0
+    temp: Optional[KillableThread] = None
     while ret ** 2 != 1:
         try:
             assert curPacket is not None, "Lost connection to the server."
-            ret = ProcessPacket(curPacket, context)
-            receivingThread = ReceiveThread(sock, 180)
+            if curPacket.type == 8:
+                print("你死了")
+                ret = 2
+            elif curPacket.type == -8:
+                ret = 1 if curPacket['result'] and context['identity'] >= 0 else -1
+                break
+            else:
+                ret = 0
+            if curPacket.type in [4, 5]:
+                """
+                Only print the message, does not change the loop status
+                """
+                packetProcessWrapper(curPacket, context)
+            else:
+                """
+                Enter the wrapper loop
+                """
+                if temp is not None and temp.is_alive():
+                    temp.kill()
+                temp = KillableThread(packetProcessWrapper,
+                                      *(curPacket, context))
+                temp.start()
+            receivingThread = ReceiveThread(sock, 1024)
+            receivingThread.setDaemon(True)
             receivingThread.start()
             receivingThread.join()
             curPacket = receivingThread.getResult()
@@ -365,7 +321,7 @@ def launchClient(argv: list):
             if context['identity'] >= 0:
                 continue
             if context["isalive"] == False:
-                print("You hace already died, please wait for the result.")
+                print("你已经死了，请等待游戏结果")
                 continue
             else:
                 basePacket: dict = getBasePacket(context)
@@ -375,6 +331,7 @@ def launchClient(argv: list):
                 sendingThread = Thread(
                     target=packetSend.send, args=(sock, )
                 )
+                sendingThread.setDaemon(True)
                 sendingThread.start()
 
     if ret == 1:
