@@ -1,8 +1,7 @@
-import ctypes
-import threading
 from random import randint, shuffle
 from threading import Thread
-from typing import Any, Callable, Dict, Tuple
+from typing import Any, Dict, Tuple
+from time import sleep
 
 from .abstraction import *
 from ..WP import ChunckedData, _recv, KillableThread
@@ -40,7 +39,7 @@ class Game:
     - ``
     """
 
-    def __init__(self, ip: str, port: int, playerCount: int):
+    def __init__(self, ipv4: str, ipv6: str, port: int, playerCount: int):
         """
         Initializa a new game
 
@@ -59,16 +58,23 @@ class Game:
         self.playerCount: int = playerCount
         self.allPlayer: Dict[int, Any] = {}
         self.activePlayer: Dict[int, Any] = {}
-        self.listeningAddr: Tuple[str, int] = (ip, port)
-        self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.socket.bind(self.listeningAddr)
-        self.socket.listen(10)
+
+        self.socketv4 = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.socketv4.bind((ipv4, port))
+        self.socketv4.listen(10)
+        self.socketv6 = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
+        self.socketv6.bind((ipv6, port))
+        self.socketv6.listen(10)
+
         self.running: bool = False
         self.identityList: List[Any] = []
-        self.listener: IncomingConnection = IncomingConnection(
-            self.socket, self)
+        self.listener4: IncomingConnection = IncomingConnection(
+            self.socketv4, self)
+        self.listener6: IncomingConnection = IncomingConnection(
+            self.socketv6, self)
         # Further initialization
-        self.listener.setName("Incoming connection receiver")
+        self.listener4.setName("IPV4 incoming connection receiver")
+        self.listener6.setName("IPV6 incoming connection receiver")
 
         # Game parameters
         self.day: int = 0
@@ -98,9 +104,15 @@ class Game:
         assert (
             self.identityList
         ), "The identity list must be initialized"  # The identity list should not be empty
-        assert self.listener.is_alive() == False, "There is already an active listener"
-        self.listener.start()
-        self.listener.join()
+        assert self.listener4.is_alive() == False, "There is already an active listener"
+        assert self.listener6.is_alive() == False, "There is already an active listener"
+        self.listener4.start()
+        self.listener6.start()
+        while self.identityList:
+            pass
+        sleep(1)
+        self.listener4.kill()
+        self.listener6.kill()
 
     def activate(self):
         """
@@ -108,9 +120,6 @@ class Game:
 
         The game must have enough players and have already allocated the identities.
         """
-        assert (
-            self.listener.is_alive() == False
-        ), "The game should not be waiting for players to join"
         assert not self.identityList, "Identity not fully allocated"
         assert (
             len(self.activePlayer) == self.playerCount
@@ -300,6 +309,10 @@ class Game:
                 candidate.append(player)
         current: ReceiveThread
 
+        if not candidate:
+            self.broadcast(None, "本局游戏没有警长")
+            return None
+
         # Candidate talk in sequence
         for i in range(2):
             """
@@ -308,8 +321,9 @@ class Game:
             Loop variable: i - only a counter
             """
             self.broadcast(None,
-                           "Election candidate: " +
-                           ", ".join([str(_) for _ in candidate])
+                           "警长竞选候选人：" +
+                           "号玩家、".join([str(_) for _ in candidate]) +
+                           "号玩家"
                            )
 
             for player in candidate:
@@ -318,7 +332,7 @@ class Game:
                 if current.getResult() is not None:
                     self.broadcast(
                         player,
-                        "Player %d said: \t" % (player,) +
+                        "%d号玩家发言：\t" % (player,) +
                         current.getResult().content['content']
                     )
 
@@ -343,6 +357,8 @@ class Game:
                     packetContent = thread.getResult().content
                 else:
                     continue
+                # REVIEW
+                print(packetContent)
                 if packetContent['vote'] and packetContent['candidate'] in sorted(self.activePlayer.keys()):
                     vote.append(packetContent['candidate'])
             result: List[int] = getVotingResult(vote)
@@ -352,19 +368,20 @@ class Game:
             del packetContent
 
             if (len(result) == 1):
-                self.broadcast(None, "The police is player %d" % (result[0], ))
+                self.broadcast(None, "警长是%d号玩家" % (result[0], ))
                 self.activePlayer[result[0]].police = True
                 return None
-            else:
+            elif i == 0:
                 self.broadcast(
                     None,
-                    "Another election is needed, candidates are %s" % ", ".join(
+                    "需要第二次竞选，警长候选人为%s号玩家" % "号玩家、".join(
                         [str(_) for _ in result]
                     )
                 )
                 candidate.clear()
-                candidate = [self.activePlayer[_] for _ in result]
-        self.broadcast(None, "No police in the game")
+                candidate, result = result, candidate
+                result.clear()
+        self.broadcast(None, "本局游戏没有警长")
         return None
 
     def victimSkill(self):
@@ -376,7 +393,7 @@ class Game:
         - If the guard or the king of werewolves dies and not dying from the poison, he can kill a person at this time.
         """
         for id in self.victim:
-            victim = self.allPlayer[id]
+            victim = self.activePlayer[id]
             retMsg = victim.onDead(True if self.night == 1 or self.day ==
                                    self.night else False, default_timeout())
             if retMsg[0] and retMsg[0].getResult() and \
@@ -396,18 +413,20 @@ class Game:
                     else:
                         break
                     if packetContent['action'] and packetContent['target'] in sorted(self.activePlayer.keys()):
-                        self.broadcast(None, "the player %d has been killed by the player %d"
+                        self.broadcast(None, "玩家%d被玩家%d杀死"
                                        % (packetContent['target'], id))
                         self.activePlayer.pop(packetContent['target'])
                         status = self.checkStatus()
                         if status != 0:
                             return status
+                        victim.informDeath()
                         victim.onDead(True, default_timeout(None))
                     else:
-                        victim.inform(
-                            "you didn't choose the target or you choose the wrong number!")
+                        victim.inform("你的选择无效")
                 else:
-                    victim.inform("you can't shoot the gun!")
+                    victim.inform("你由于女巫的毒药死亡而不能开枪")
+        for victim in self.victim:
+            self.activePlayer.pop(victim)
         self.victim.clear()
 
     def dayTime(self) -> int:
@@ -436,22 +455,24 @@ class Game:
         """
         # ANCHOR: Implement the game logic in daytime
         self.day += 1
-        self.broadcast(None, "Day %d." % (self.day))
+        self.broadcast(None, "天亮了")
 
         startpoint: int = 0
         exile: List[int] = []
 
         # announce the victim and check the game status
         if len(self.victim) == 0:
-            self.broadcast(None, "last night is safe")
+            self.broadcast(None, "昨晚是平安夜")
         else:
-            self.broadcast(None, "the victim last night is player: %s" %
-                           ", ".join(str(s) for s in self.victim))
+            self.broadcast(None, "昨晚死亡的玩家是%s号玩家" %
+                           "号玩家、".join(str(s) for s in self.victim))
         status = self.checkStatus()
         if status != 0:
             return status
         # ask if the victim want to use the skill
         if len(self.victim) > 0:
+            for id in self.victim:
+                self.activePlayer[id].informDeath()
             self.victimSkill()
 
         # ask the police (if exists) to choose the talking sequence
@@ -498,7 +519,7 @@ class Game:
                     current = player.speak()
                     current.join()
                     self.broadcast(
-                        player, "Player %d said: \t" % (id,) + current.getResult().content['content'])
+                        player, "%d号玩家发言：\t" % (id,) + current.getResult().content['content'])
 
             # Ask for vote
             voteThread: List[ReceiveThread] = []
@@ -533,6 +554,10 @@ class Game:
                     vote.append(packetContent['candidate'])
             result: List[int] = getVotingResult(vote, policeVote)
 
+            # REVIEW
+            print(vote)
+            print(result)
+
             del voteThread
             del vote
             del packetContent
@@ -543,25 +568,23 @@ class Game:
                 """
                 if not isinstance(self.activePlayer[result[0]], Idiot) or self.activePlayer[result[0]].used:
                     self.broadcast(
-                        None, "The exiled is player %d" % (result[0],)
+                        None, "被放逐的玩家是%d号玩家" % (result[0],)
                     )
                     exile.append(result[0])
                 else:
                     self.activePlayer[result[0]].used = 1
-                    self.broadcast(
-                        None, "Player %d is the idiot." % (result[0],)
-                    )
+                    self.broadcast(None, "%d号玩家是白痴" % (result[0],))
                     exile.pop()
                 break
-            else:
+            elif i == 0:
                 self.broadcast(
                     None,
-                    "Another election is needed, exile candidates are %s" % ", ".join(
+                    "需要另一次投票，投票候选人为%s号玩家" % "号玩家、".join(
                         [str(_) for _ in result]
                     )
                 )
                 exile.clear()
-                exile = [self.activePlayer[_] for _ in result]
+                exile, result = result, exile
 
         # announce the exile and check the game status
         if len(exile) == 0:
@@ -573,13 +596,15 @@ class Game:
             for id in self.victim:
                 if id in sorted(self.activePlayer.keys()):
                     self.activePlayer.pop(id)
-            self.broadcast(None, "the exile player is: %s" %
-                           ", ".join(str(s) for s in self.victim))
+            self.broadcast(None, "被放逐的玩家是%s号玩家" %
+                           "号玩家、".join(str(s) for s in self.victim))
         status = self.checkStatus()
         if status:
             return status
         # ask if the victim want to use the skill
         while self.victim:  # 极端情况可能会开两次枪
+            for id in self.victim:
+                self.activePlayer[id].informDeath()
             self.victimSkill()
         status = self.checkStatus()
         return status
@@ -626,7 +651,7 @@ class Game:
         # SECTION: Implement the game logic at night
 
         self.night += 1
-        self.broadcast(None, "Night %d." % (self.night))
+        self.broadcast(None, "天黑请闭眼")
 
         # Parameters:
         victimByWolf: int = 0
@@ -644,7 +669,7 @@ class Game:
 
         for wolf in wolves:
             self.activePlayer[wolf].inform(
-                "Your peers are: " + ", ".join([str(_) for _ in wolves])
+                "目前在场的狼人：" + "号玩家、".join([str(_) for _ in wolves]) + "号玩家"
             )
 
         wolfThread: List[KillableThread] = []
@@ -803,8 +828,6 @@ class Game:
         if victimByWolf in sorted(self.activePlayer.keys()):
             self.victim.append(victimByWolf)
         shuffle(self.victim)
-        for id in self.victim:
-            self.activePlayer.pop(id)
 
         if self.guardedLastNight != guardTarget:
             self.guardedLastNight = guardTarget
@@ -812,12 +835,6 @@ class Game:
             self.guardedLastNight = 0
 
         self.night += 1
-
-    def preLaunch(self, addr: Tuple[str, int]):
-        while self.identityList:
-            ReceiveThread = IncomingConnection(self.socket, self)
-            ReceiveThread.start()
-            ReceiveThread.join()
 
     def launch(self):
         assert self.running, "The game must be activated!"
@@ -835,7 +852,7 @@ class Game:
         )
 
 
-class IncomingConnection(Thread):
+class IncomingConnection(KillableThread):
     """
     Create a thread that receives a handshake package.
 
@@ -843,16 +860,19 @@ class IncomingConnection(Thread):
     """
 
     def __init__(self, connection: socket.socket, dest: Game):
-        super(IncomingConnection, self).__init__()
+        super(IncomingConnection, self).__init__(connection.accept)
         self.socket = connection
         self.game: Game = dest
+        self.pending: bool = False
 
     def run(self):
         # REVIEW
         while self.game.playerCount != len(self.game.activePlayer):
             # REVIEW
             print("Listening for additional player...")
+            self.pending = True
             c, addr = self.socket.accept()
+            self.pending = False
             # REVIEW
             print(c.getpeername())
             print(c.getsockname())

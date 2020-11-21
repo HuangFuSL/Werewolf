@@ -1,5 +1,5 @@
 from .abstraction import *
-from typing import Tuple, Union
+from typing import Tuple, Union, List, Optional
 from itertools import groupby
 
 
@@ -23,11 +23,12 @@ def getVotingResult(vote: List[int], policevote: Optional[int] = None) -> List[i
         else:
             voteList[policevote] = 1.5
     ret: List[int] = []
-    max: int = 0
+    maxV: float = 0
     for i in voteList:
-        if voteList[i] > max:
+        if voteList[i] > maxV:
+            maxV = voteList[i]
             ret.clear()
-        if voteList[i] >= max:
+        if voteList[i] >= maxV:
             ret.append(i)
 
     return ret

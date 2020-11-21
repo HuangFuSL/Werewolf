@@ -9,12 +9,10 @@ from Werewolf.server.abstraction import *
 from Werewolf.WP import api
 
 
-HOST = ''
+HOST4 = ''
+HOST6 = ''
 SERVER_PORT = 21567
 BUFSIZ = 1024
-ADDR = (HOST, SERVER_PORT)
-
-tcpSerSock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
 playerCount: int = 6
 # input the number of clients
@@ -25,7 +23,7 @@ playerCount: int = 6
 print('the number of players is: %d' % playerCount)
 
 # initialize a new game
-game = Game(HOST, SERVER_PORT, playerCount)
+game = Game(HOST4, HOST6, SERVER_PORT, playerCount)
 
 # input the identityList
 # identityList = eval(input('> '))

@@ -125,14 +125,24 @@ class Person():
         packetSend = ChunckedData(4, **packet)
         sendingThread = Thread(target=packetSend.send,
                                args=(self.socket, ))
+        sendingThread.setDaemon(True)
+        sendingThread.start()
+
+    def informDeath(self):
+        packet = self._getBasePacket()
+        packetSend = ChunckedData(8, **packet)
+        sendingThread = Thread(
+            target=packetSend.send, args=(self.socket, ))
+        sendingThread.setDaemon(True)
         sendingThread.start()
 
     def informResult(self, result: bool):
         packet = self._getBasePacket()
         packet['result'] = result
-        packetSend = ChunckedData(9, **packet)
+        packetSend = ChunckedData(-8, **packet)
         sendingThread = Thread(target=packetSend.send,
                                args=(self.socket, ))
+        sendingThread.setDaemon(True)
         sendingThread.start()
 
     def vote(self, timeout: float = defaultTimeout) -> ReceiveThread:
@@ -148,11 +158,12 @@ class Person():
             ReceiveThread, the thread receiving from the client
         """
         packet = self._getBasePacket()
-        packet['prompt'] = "Please vote for the people to be banished:"
+        packet['prompt'] = "请投票要执行放逐的玩家：\n"
         packet['timeLimit'] = timeout
         packetSend = ChunckedData(7, **packet)
         sendingThread = Thread(target=packetSend.send,
                                args=(self.socket, ))
+        sendingThread.setDaemon(True)
         sendingThread.start()
         return self._startListening(timeout=timeout)
 
@@ -170,12 +181,13 @@ class Person():
         """
         packet = self._getBasePacket()
         packet['format'] = 'bool'
-        packet['prompt'] = 'Do you want to be the policeman?\nYou have %f seconds to decide.\nEnter `True` to join and `False` to stay out.' % (
-            timeout, )
+        packet['prompt'] = '请所有玩家上警\n你有%d秒的选择时间\n输入True选择上警，输入False选择不上警：\n' % (
+            int(timeout), )
         packet['timeLimit'] = timeout
         packet['iskill'] = False
         packetSend = ChunckedData(3, **packet)
         sendingThread = Thread(target=packetSend.send, args=(self.socket,))
+        sendingThread.setDaemon(True)
         sendingThread.start()
         return self._startListening(timeout=timeout)
 
@@ -193,13 +205,14 @@ class Person():
         """
         if self.police:
             packet = self._getBasePacket()
-            packet['prompt'] = "Please choose the sequence: True for clockwise and False for anti-clockwise:\n"
+            packet['prompt'] = "请选择玩家发言顺序，True表示顺时针发言，False表示逆时针发言：\n"
             packet['timeLimit'] = timeout
             packet['iskill'] = False
             packet['format'] = "bool"
             packetSend = ChunckedData(3, **packet)
             sendingThread = Thread(
                 target=packetSend.send, args=(self.socket, ))
+            sendingThread.setDaemon(True)
             sendingThread.start()
             return self._startListening(timeout=timeout)
         else:
@@ -233,11 +246,12 @@ class Person():
         """
         if not self.police:
             packet = self._getBasePacket()
-            packet['prompt'] = "Please vote for the police:"
+            packet['prompt'] = "请投票："
             packet['timeLimit'] = timeout
             packetSend = ChunckedData(7, **packet)
             sendingThread = Thread(
                 target=packetSend.send, args=(self.socket, ))
+            sendingThread.setDaemon(True)
             sendingThread.start()
             return self._startListening(timeout=timeout)
         else:
@@ -260,6 +274,7 @@ class Person():
         packetSend = ChunckedData(6, **packet)
         sendingThread = Thread(target=packetSend.send,
                                args=(self.socket, ))
+        sendingThread.setDaemon(True)
         sendingThread.start()
         return self._startListening(timeout=timeout)
 
@@ -289,11 +304,12 @@ class Person():
         ret = []
         if self.police:
             packet = self._getBasePacket()
-            packet['prompt'] = "Please select the player you want to inherit the police:"
+            packet['prompt'] = "请选择要继承警徽的玩家：\n"
             packet['timeLimit'] = timeouts
             packetSend = ChunckedData(7, **packet)
             sendingThread = Thread(
                 target=packetSend.send, args=(self.socket, ))
+            sendingThread.setDaemon(True)
             sendingThread.start()
             ret.append(self._startListening(timeout=timeouts))
         else:
@@ -304,6 +320,7 @@ class Person():
             packetSend = ChunckedData(6, **packet)
             sendingThread = Thread(
                 target=packetSend.send, args=(self.socket, ))
+            sendingThread.setDaemon(True)
             sendingThread.start()
             ret.append(self._startListening(timeout=timeouts))
         else:
@@ -378,13 +395,14 @@ class Wolf(Person):
         """
         packet = self._getBasePacket()
         packet['format'] = "int"
-        packet['prompt'] = "Please select a person to kill.\nYou have %f seconds to decide with your partner" % (
-            timeout, )
+        packet['prompt'] = "狼人请刀人。\n你有%d秒的时间与同伴交流\n输入任何文本可以与同伴交流，输入数字投票" % (
+            int(timeout), )
         packet['timeLimit'] = timeout
         packet['iskill'] = True
         packetSend = ChunckedData(3, **packet)
         sendingThread = Thread(target=packetSend.send,
                                args=(self.socket,))
+        sendingThread.setDaemon(True)
         sendingThread.start()
         timer = TimeLock(timeout)
         timer.setDaemon(True)
@@ -401,9 +419,12 @@ class Wolf(Person):
                 recv = self._startListening(timeout)
                 for peer in self.peerList:
                     packet.update(**peer._getBasePacket())
+                    packet['content'] = "%d号玩家发言：\t" % (
+                        self.id, ) + packet['content']
                     packetSend = ChunckedData(5, **packet)
                     thread = Thread(target=packetSend.send,
                                     args=(peer.socket, ))
+                    thread.setDaemon(True)
                     thread.start()
         return recv
 
@@ -456,6 +477,7 @@ class SkilledPerson(Person):
         packetSend = ChunckedData(3, **packet)
         sendingThread = Thread(target=packetSend.send,
                                args=(self.socket, ))
+        sendingThread.setDaemon(True)
         sendingThread.start()
         return self._startListening(timeout)
 
@@ -489,8 +511,7 @@ class WhiteWerewolf(Wolf, SkilledPerson):
         self.type = -2
 
     def skill(self, timeout: float = defaultTimeout):
-        prompt = """Please select a person to kill.
-You have %f seconds to decide.""" % (timeout, )
+        prompt = """请选择在自爆时要杀死的人\n你有%d秒的时间进行决定""" % (int(timeout), )
         return SkilledPerson.skill(self, prompt, timeout)
 
 
@@ -506,8 +527,7 @@ class Predictor(SkilledPerson):
         self.type = 1
 
     def skill(self, timeout: float = defaultTimeout):
-        prompt = """Please select a person to inspect his identity.
-You have %f seconds to decide.""" % (timeout, )
+        prompt = "请选择你要查验的人\n你有%d秒的时间进行决定" % (int(timeout), )
         return SkilledPerson.skill(self, prompt, timeout)
 
 
@@ -526,18 +546,18 @@ class Witch(SkilledPerson):
         packet = self._getBasePacket()
         if self.used % 2 == 1:
             killed = 0
-        packet['content'] = "The player %s is killed at night." % (
-            str(killed) if killed else "unknown", )
-        packetSend = ChunckedData(5, **packet)
+        self.inform("晚上%s玩家死了" % (
+            str(killed) + "号" if killed else "未知", )
+        )
         if self.used == 0:  # Not ever used
-            prompt = """Please select a person to use the poison. If you want to save the killed player %d, enter "0". If you don't want do anything enter "-1".
-You have %f seconds to decide.""" % (killed, timeout)
+            prompt = "你有一瓶解药，是否要救%d号玩家；你有一瓶毒药，是否使用\n输入0使用解药，玩家编号使用毒药，-1不使用，你有%d秒时间进行决定\n" % (
+                killed, int(timeout))
         elif self.used == 1:  # Saved somebody.
-            prompt = """Please select a person to use the poison. You have %f seconds to decide.""" % (
-                timeout, )
+            prompt = "你有一瓶毒药，是否使用\n输入玩家编号使用毒药，-1不使用\n你有%d秒的时间进行决定" % (
+                int(timeout), )
         elif self.used == 2:  # Killed somebody
-            prompt = """If you want to save the killed player %d, enter "0". If you don't want do anything enter "-1".\nYou have %f seconds to decide.""" % (killed,
-                                                                                                                                                             timeout)
+            prompt = "你有一瓶解药，是否要救%d号玩家\n输入0使用解药，输入-1不使用，你有%d秒时间进行决定\n" % (
+                killed, int(timeout))
         else:
             return None
         return SkilledPerson.skill(self, prompt, timeout, "int")
@@ -555,8 +575,7 @@ class Hunter(SkilledPerson):
         self.type = 3
 
     def skill(self, timeout: float = defaultTimeout):
-        prompt = """Please select a person to kill.
-You have %f seconds to decide.""" % (timeout, )
+        prompt = "请选择你要杀死的玩家，你有%d秒时间进行决定\n" % (int(timeout), )
         return SkilledPerson.skill(self, prompt, timeout)
 
 
@@ -572,8 +591,7 @@ class Guard(SkilledPerson):
         self.type = 4
 
     def skill(self, timeout: float = defaultTimeout):
-        prompt = """Please select a person to guard.
-You have %f seconds to decide.""" % (timeout, )
+        prompt = "请选择你要守卫的玩家，你有%d秒时间进行决定\n" % (int(timeout), )
         return SkilledPerson.skill(self, prompt, timeout)
 
 
