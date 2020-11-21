@@ -174,12 +174,11 @@ def ProcessPacket(toReply: ChunckedData, context: dict) -> int:
             receivingThread = ReceiveThread(context['socket'], 120)
             receivingThread.setDaemon(True)
             receivingThread.start()
+            readThread = ReadInput("", str, toReply['timeLimit'])
+            readThread.setDaemon(True)
+            readThread.start()
 
             while timer.is_alive():
-                readThread = ReadInput("", str, toReply['timeLimit'])
-                readThread.setDaemon(True)
-                readThread.start()
-                readThread.join()
 
                 if receivingThread.is_alive() == False and receivingThread.getResult() is not None:
                     ProcessPacket(receivingThread.getResult(), context=context)
@@ -187,39 +186,45 @@ def ProcessPacket(toReply: ChunckedData, context: dict) -> int:
                     receivingThread.setDaemon(True)
                     receivingThread.start()
 
-                try:
-                    ret = int(readThread.getResult())
-                except ValueError:
-                    """
-                    5: {
-                        'content': str                 # 自由交谈的内容
-                        # 'type': tuple                   # 能收到消息的身份列表，空列表指全部玩家
-                    },
-                    """
-                    if type(readThread.getResult()) == str:
-                        basePacket['content'] = readThread.getResult()
-                        packetType = 5
-                    else:
-                        basePacket['action'] = False
-                        packetType = -3
-                else:
-                    """
-                    -3: {
-                        'action': bool,                 # 玩家是否执行操作（若回送，指玩家作用是否成功）
-                        'target': int                   # 玩家执行操作的目标
-                    },
-                    """
-                    basePacket['action'] = ret > 0
-                    basePacket['target'] = ret
-                    packetType = -3
+                if readThread.is_alive() == False:
 
-                packetSend = ChunckedData(packetType, **basePacket)
-                sendingThread = Thread(
-                    target=packetSend.send, args=(context['socket'], )
-                )
-                sendingThread.start()
-                if (packetType == -3):
-                    break
+                    try:
+                        ret = int(readThread.getResult())
+                    except ValueError:
+                        """
+                        5: {
+                            'content': str                 # 自由交谈的内容
+                            # 'type': tuple                   # 能收到消息的身份列表，空列表指全部玩家
+                        },
+                        """
+                        if type(readThread.getResult()) == str:
+                            basePacket['content'] = readThread.getResult()
+                            packetType = 5
+                        else:
+                            basePacket['action'] = False
+                            packetType = -3
+                    else:
+                        """
+                        -3: {
+                            'action': bool,                 # 玩家是否执行操作（若回送，指玩家作用是否成功）
+                            'target': int                   # 玩家执行操作的目标
+                        },
+                        """
+                        basePacket['action'] = ret > 0
+                        basePacket['target'] = ret
+                        packetType = -3
+
+                    readThread = ReadInput("", str, toReply['timeLimit'])
+                    readThread.setDaemon(True)
+                    readThread.start()
+
+                    packetSend = ChunckedData(packetType, **basePacket)
+                    sendingThread = Thread(
+                        target=packetSend.send, args=(context['socket'], )
+                    )
+                    sendingThread.start()
+                    if (packetType == -3):
+                        return 0
 
         else:
             print(toReply['prompt'])
