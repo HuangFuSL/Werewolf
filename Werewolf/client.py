@@ -171,18 +171,21 @@ def ProcessPacket(toReply: ChunckedData, context: dict) -> int:
             timer.start()
             ret: int = 0
             packetType: int
+            receivingThread = ReceiveThread(context['socket'], 120)
+            receivingThread.setDaemon(True)
+            receivingThread.start()
 
             while timer.is_alive():
                 readThread = ReadInput("", str, toReply['timeLimit'])
                 readThread.setDaemon(True)
                 readThread.start()
                 readThread.join()
-                receivingThread = ReceiveThread(context['sock'], 120)
-                receivingThread.setDaemon(True)
-                receivingThread.start()
 
-                if not receivingThread.is_alive() and receivingThread.getResult() is not None:
+                if receivingThread.is_alive() == False and receivingThread.getResult() is not None:
                     ProcessPacket(receivingThread.getResult(), context=context)
+                    receivingThread = ReceiveThread(context['socket'], 120)
+                    receivingThread.setDaemon(True)
+                    receivingThread.start()
 
                 try:
                     ret = int(readThread.getResult())
