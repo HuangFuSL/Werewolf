@@ -600,6 +600,7 @@ class Game:
         tempStart.reverse()
         tempEnd.reverse()
         seq = tempStart + tempEnd
+        seq.reverse()
 
         return seq
 

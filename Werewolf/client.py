@@ -5,6 +5,7 @@ Created on Sat Nov  7 15:06:28 2020
 @author: lenovo-pc
 """
 
+from Werewolf.WP.api import KillableThread
 import socket
 from socket import AF_INET, SOCK_STREAM
 import sys
@@ -317,7 +318,11 @@ def launchClient(argv: list):
     while ret ** 2 != 1:
         try:
             assert curPacket is not None, "Lost connection to the server."
-            ret = ProcessPacket(curPacket, context)
+            tempThread = KillableThread(ProcessPacket, *(curPacket, context))
+            tempThread.start()
+            tempThread.join()
+            ret = tempThread.getResult()
+            del tempThread
             receivingThread = ReceiveThread(sock, 180)
             receivingThread.start()
             receivingThread.join()
