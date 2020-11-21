@@ -391,7 +391,6 @@ class Wolf(Person):
             elif recv.getResult().type == 5:
                 packet: dict = recv.getResult().content.copy()
                 recv = self._startListening(timeout)
-                packet.pop('type')
                 for peer in self.peerList:
                     packet.update(**peer._getBasePacket())
                     packetSend = ChunckedData(5, **packet)

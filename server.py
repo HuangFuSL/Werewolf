@@ -9,7 +9,7 @@ from Werewolf.server.abstraction import *
 from Werewolf.WP import api
 
 
-HOST = 'localhost'
+HOST = '183.172.40.200'
 SERVER_PORT = 21567
 BUFSIZ = 1024
 ADDR = (HOST, SERVER_PORT)

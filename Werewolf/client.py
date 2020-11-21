@@ -177,6 +177,12 @@ def ProcessPacket(toReply: ChunckedData, context: dict) -> int:
                 readThread.setDaemon(True)
                 readThread.start()
                 readThread.join()
+                receivingThread = ReceiveThread(context['sock'], 120)
+                receivingThread.setDaemon(True)
+                receivingThread.start()
+
+                if not receivingThread.is_alive() and receivingThread.getResult() is not None:
+                    ProcessPacket(receivingThread.getResult(), context=context)
 
                 try:
                     ret = int(readThread.getResult())
@@ -200,7 +206,7 @@ def ProcessPacket(toReply: ChunckedData, context: dict) -> int:
                         'target': int                   # 玩家执行操作的目标
                     },
                     """
-                    basePacket['action'] = True
+                    basePacket['action'] = ret > 0
                     basePacket['target'] = ret
                     packetType = -3
 
