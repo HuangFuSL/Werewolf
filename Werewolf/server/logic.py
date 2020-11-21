@@ -185,6 +185,11 @@ class Game:
                 continue
             player.inform(content)
 
+    def announceResult(self, status: bool):
+        for id in sorted(self.allPlayer.keys()):
+            player = self.allPlayer[id]
+            player.informResult(status)
+
     def setIdentityList(self, **kwargs: int):
         """
         Initialize the identity configuration.
@@ -823,6 +828,7 @@ class Game:
                 self.electPolice()
             self.dayTime()
         # TODO: Add game result reply
+        self.announceResult(self.status == 1)
         self.broadcast(
             None,
             "The villagers won" if self.status == 1 else "The wolves won"

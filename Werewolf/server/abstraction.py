@@ -127,6 +127,14 @@ class Person():
                                args=(self.socket, ))
         sendingThread.start()
 
+    def informResult(self, result: bool):
+        packet = self._getBasePacket()
+        packet['result'] = result
+        packetSend = ChunckedData(9, **packet)
+        sendingThread = Thread(target=packetSend.send,
+                               args=(self.socket, ))
+        sendingThread.start()
+
     def vote(self, timeout: float = defaultTimeout) -> ReceiveThread:
         """
         Send a package to a player to vote for the exiled.

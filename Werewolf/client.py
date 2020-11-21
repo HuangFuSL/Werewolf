@@ -316,7 +316,8 @@ def launchClient(argv: list):
     ret: int = 0
     while ret ** 2 != 1:
         try:
-            assert curPacket is not None, "Lost connection to the server."
+            if curPacket is None:
+                continue
             ret, temp = ProcessPacket(curPacket, context)
             if temp is None:
                 receivingThread = ReceiveThread(sock, 180)
