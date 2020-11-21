@@ -5,7 +5,7 @@ from threading import Thread
 from typing import Any, Callable, Dict, Tuple
 
 from .abstraction import *
-from ..WP import ChunckedData, _recv
+from ..WP import ChunckedData, _recv, KillableThread
 from .util import *
 
 

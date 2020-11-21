@@ -8,7 +8,7 @@ Created on Sat Nov  7 15:06:28 2020
 import socket
 from socket import AF_INET, SOCK_STREAM
 import sys
-from threading import Thread
+from threading import Thread, ThreadError
 from typing import Any, Dict, Optional, Tuple, Union
 try:
     from .WP import ChunckedData, TimeLock, ReceiveThread, ReadInput
@@ -61,6 +61,8 @@ def ProcessPacket(toReply: ChunckedData, context: dict) -> int:
     """
     Ask for user input and build the corresponding packet.
     """
+    if toReply is None:
+        return 0
     if context['isalive'] == False and toReply.type != -8:
         return -2
     if toReply.type == -1:
@@ -128,7 +130,7 @@ def ProcessPacket(toReply: ChunckedData, context: dict) -> int:
 
             while timer.is_alive():
 
-                if receivingThread.is_alive() == False and receivingThread.getResult() is not None:
+                if receivingThread.is_alive() == False:
                     ProcessPacket(receivingThread.getResult(), context=context)
                     receivingThread = ReceiveThread(context['socket'], 120)
                     receivingThread.setDaemon(True)
@@ -174,6 +176,8 @@ def ProcessPacket(toReply: ChunckedData, context: dict) -> int:
                     if (packetType == -3):
                         return 0
 
+            readThread.kill()
+
         else:
             print(toReply['prompt'])
             print("You have to enter a(n) %s" % (toReply['format'], ))
@@ -193,8 +197,6 @@ def ProcessPacket(toReply: ChunckedData, context: dict) -> int:
                 target=packetSend.send, args=(context['socket'], )
             )
             sendingThread.start()
-
-        readThread.kill()
 
     elif toReply.type == 4:
         """
