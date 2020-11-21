@@ -138,6 +138,8 @@ def ProcessPacket(toReply: ChunckedData, context: dict) -> int:
 
                 if readThread.is_alive() == False:
 
+                    basePacket = getBasePacket(context)
+
                     try:
                         ret = int(readThread.getResult())
                     except ValueError:
@@ -174,9 +176,10 @@ def ProcessPacket(toReply: ChunckedData, context: dict) -> int:
                     )
                     sendingThread.start()
                     if (packetType == -3):
-                        return 0
+                        break
 
             readThread.kill()
+            receivingThread.kill()
 
         else:
             print(toReply['prompt'])

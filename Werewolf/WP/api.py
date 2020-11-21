@@ -131,33 +131,6 @@ def _recv(connection: socket.socket) -> ChunckedData:
     return ret
 
 
-class ReceiveThread(threading.Thread):
-
-    def __init__(self, connection: socket.socket, timeout: float = 0):
-        super(ReceiveThread, self).__init__()
-        self.result: Any = None
-        self.timeout: float = timeout
-        self.connection: socket.socket = connection
-        self.exception: ReceiveTimeoutError = ReceiveTimeoutError(self.timeout)
-
-    def run(self):
-        if not self.timeout:
-            self.result = _recv(self.connection)
-        else:
-            dest: ReceiveThread = ReceiveThread(self.connection)
-            dest.setDaemon(True)
-            dest.start()
-            dest.join(self.timeout)
-            self.result = dest.getResult()
-            if self.result is None:
-                self.exitcode = 1
-                self.exception = ReceiveTimeoutError(self.timeout)
-                self.exc_traceback = str(self.exception)
-
-    def getResult(self) -> Optional[ChunckedData]:
-        return self.result
-
-
 class TimeLock(threading.Thread):
     """
     Start a thread waiting in the background.
@@ -194,17 +167,18 @@ class KillableThread(threading.Thread):
     A thread class extending threading.Thread, provides a kill() method to stop the thread and a getResult() method to get the return value of the thread.
     """
 
-    def __init__(self, func: Callable, **kwargs):
+    def __init__(self, func: Callable, *args, **kwargs):
         super().__init__()
         self.func: Callable = func
         self.funcArg: dict = kwargs
+        self.funcTup: Tuple = args
         self.result: Any = None
 
     def run(self):
         """
         Executes the function here
         """
-        self.result = self.func(**self.funcArg)
+        self.result = self.func(*self.funcTup, **self.funcArg)
 
     def get_id(self):
         """
@@ -280,4 +254,31 @@ class ReadInput(KillableThread):
         - `None`: if timeout
         - `KeyboardInterrupt`: if Ctrl-C is pressed
         """
+        return self.result
+
+
+class ReceiveThread(KillableThread):
+
+    def __init__(self, connection: socket.socket, timeout: float = 0):
+        super(ReceiveThread, self).__init__(_recv, *(connection, ))
+        self.result: Any = None
+        self.timeout: float = timeout
+        self.connection: socket.socket = connection
+        self.exception: ReceiveTimeoutError = ReceiveTimeoutError(self.timeout)
+
+    def run(self):
+        if not self.timeout:
+            self.result = _recv(self.connection)
+        else:
+            dest: ReceiveThread = ReceiveThread(self.connection)
+            dest.setDaemon(True)
+            dest.start()
+            dest.join(self.timeout)
+            self.result = dest.getResult()
+            if self.result is None:
+                self.exitcode = 1
+                self.exception = ReceiveTimeoutError(self.timeout)
+                self.exc_traceback = str(self.exception)
+
+    def getResult(self) -> Optional[ChunckedData]:
         return self.result
