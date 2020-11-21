@@ -58,14 +58,14 @@ def getClientAddr(context: dict) -> Tuple[str, int]:
     )
 
 
-def ProcessPacket(toReply: ChunckedData, context: dict) -> int:
+def ProcessPacket(toReply: ChunckedData, context: dict) -> Tuple[int, Optional[ReceiveThread]]:
     """
     Ask for user input and build the corresponding packet.
     """
     if toReply is None:
-        return 0
+        return 0, None
     if context['isalive'] == False and toReply.type != -8:
-        return -2
+        return -2, None
     if toReply.type == -1:
         """
         -1: {
@@ -180,8 +180,7 @@ def ProcessPacket(toReply: ChunckedData, context: dict) -> int:
                         readThread.setDaemon(True)
                         readThread.start()
 
-            readThread.kill()
-            receivingThread.kill()
+            return 0, receivingThread
 
         else:
             print(toReply['prompt'])
@@ -272,7 +271,7 @@ def ProcessPacket(toReply: ChunckedData, context: dict) -> int:
         8: {},
         """
         context['isalive'] = False
-        return -2
+        return -2, None
 
     elif toReply.type == -8:
         """
@@ -281,10 +280,10 @@ def ProcessPacket(toReply: ChunckedData, context: dict) -> int:
         }
         """
         if toReply['result'] == context['identity'] >= 0:
-            return 1
+            return 1, None
         else:
-            return -1
-    return 0
+            return -1, None
+    return 0, None
 
 
 def launchClient(argv: list):
@@ -318,13 +317,12 @@ def launchClient(argv: list):
     while ret ** 2 != 1:
         try:
             assert curPacket is not None, "Lost connection to the server."
-            tempThread = KillableThread(ProcessPacket, *(curPacket, context))
-            tempThread.start()
-            tempThread.join()
-            ret = tempThread.getResult()
-            del tempThread
-            receivingThread = ReceiveThread(sock, 180)
-            receivingThread.start()
+            ret, temp = ProcessPacket(curPacket, context)
+            if temp is None:
+                receivingThread = ReceiveThread(sock, 180)
+                receivingThread.start()
+            else:
+                receivingThread = temp
             receivingThread.join()
             curPacket = receivingThread.getResult()
         except KeyboardInterrupt:
