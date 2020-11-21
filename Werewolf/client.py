@@ -11,29 +11,12 @@ import sys
 from threading import Thread
 from typing import Any, Dict, Optional, Tuple, Union
 try:
-    from .WP import ChunckedData, TimeLock, ReceiveThread
+    from .WP import ChunckedData, TimeLock, ReceiveThread, ReadInput
 except ImportError:
-    from WP import ChunckedData, TimeLock, ReceiveThread
+    from WP import ChunckedData, TimeLock, ReceiveThread, ReadInput
 
 BUFSIZE = 1024
 ROLE = 0
-
-
-def getInput(prompt: str, inputType: type = str) -> Any:
-    flag: bool = True
-    temp: str
-    while flag:
-        try:
-            temp = input(prompt)
-        except EOFError:
-            return KeyboardInterrupt()
-        if inputType != str:
-            try:
-                return eval(temp)
-            except:
-                print("Input type mismatch!")
-        else:
-            return temp
 
 
 def convertToString(code: int) -> str:
@@ -72,41 +55,6 @@ def getClientAddr(context: dict) -> Tuple[str, int]:
         context['clientAddr'],
         context['clientPort']
     )
-
-
-class ReadInput(Thread):
-    """
-    The input thread, will be interrupted by KeyBoardInterruption
-    """
-
-    def __init__(self, prompt: str, inputType: type = str, timeout: float = 0):
-        super().__init__()
-        self.inputType = inputType
-        self.timeout = timeout
-        self.result: Any = None
-        self.prompt = prompt
-
-    def run(self) -> Any:
-        if self.timeout == 0:
-            self.result = getInput(self.prompt, self.inputType)
-        else:
-            dest: ReadInput = ReadInput(self.prompt, self.inputType)
-            dest.setDaemon(True)
-            dest.start()
-            dest.join(self.timeout)
-            self.result = dest.getResult()
-            if self.result is None:
-                print("Input timeout.")
-
-    def getResult(self) -> Any:
-        """
-        Get the return value of the input
-
-        - inputType: if the input is correctly processed
-        - `None`: if timeout
-        - `KeyboardInterrupt`: if Ctrl-C is pressed
-        """
-        return self.result
 
 
 def ProcessPacket(toReply: ChunckedData, context: dict) -> int:
@@ -245,6 +193,8 @@ def ProcessPacket(toReply: ChunckedData, context: dict) -> int:
                 target=packetSend.send, args=(context['socket'], )
             )
             sendingThread.start()
+
+        readThread.kill()
 
     elif toReply.type == 4:
         """

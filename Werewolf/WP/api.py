@@ -1,11 +1,13 @@
+import ctypes
 import gzip
 import json
 import socket
 import threading
 from io import BytesIO
 from time import sleep
+from typing import Any, Callable, Dict, Optional, Tuple
+
 from .utils import _checkParam
-from typing import Any, Dict, Optional, Tuple
 
 
 class PacketTypeMismatchException(Exception):
@@ -185,3 +187,97 @@ class TimeLock(threading.Thread):
 
     def getStatus(self):
         return self.end
+
+
+class KillableThread(threading.Thread):
+    """
+    A thread class extending threading.Thread, provides a kill() method to stop the thread and a getResult() method to get the return value of the thread.
+    """
+
+    def __init__(self, func: Callable, **kwargs):
+        super().__init__()
+        self.func: Callable = func
+        self.funcArg: dict = kwargs
+        self.result: Any = None
+
+    def run(self):
+        """
+        Executes the function here
+        """
+        self.result = self.func(**self.funcArg)
+
+    def get_id(self):
+        """
+        Get the id of the thread
+        """
+        if hasattr(self, '_thread_id'):
+            return self._thread_id
+        for id, thread in threading._active.items():
+            if thread is self:
+                return id
+
+    def kill(self):
+        """
+        Stops the thread
+        """
+        thread_id = self.get_id()
+        res = ctypes.pythonapi.PyThreadState_SetAsyncExc(thread_id,
+                                                         ctypes.py_object(SystemExit))
+        if res > 1:
+            ctypes.pythonapi.PyThreadState_SetAsyncExc(thread_id, 0)
+            print('Exception raise failure')
+
+    def getResult(self):
+        return self.result
+
+
+def getInput(prompt: str, inputType: type = str) -> Any:
+    flag: bool = True
+    temp: str
+    while flag:
+        try:
+            temp = input(prompt)
+        except EOFError:
+            return KeyboardInterrupt()
+        if inputType != str:
+            try:
+                return eval(temp)
+            except:
+                print("Input type mismatch!")
+        else:
+            return temp
+
+
+class ReadInput(KillableThread):
+    """
+    The input thread, will be interrupted by KeyBoardInterruption
+    """
+
+    def __init__(self, prompt: str, inputType: type = str, timeout: float = 0):
+        super().__init__(getInput)
+        self.inputType = inputType
+        self.timeout = timeout
+        self.result: Any = None
+        self.prompt = prompt
+
+    def run(self) -> Any:
+        if self.timeout == 0:
+            self.result = getInput(self.prompt, self.inputType)
+        else:
+            dest: ReadInput = ReadInput(self.prompt, self.inputType)
+            dest.setDaemon(True)
+            dest.start()
+            dest.join(self.timeout)
+            self.result = dest.getResult()
+            if self.result is None:
+                print("Input timeout.")
+
+    def getResult(self) -> Any:
+        """
+        Get the return value of the input
+
+        - inputType: if the input is correctly processed
+        - `None`: if timeout
+        - `KeyboardInterrupt`: if Ctrl-C is pressed
+        """
+        return self.result
