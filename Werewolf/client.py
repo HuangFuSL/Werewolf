@@ -240,8 +240,9 @@ def packetProcessWrapper(curPacket: ChunckedData, context: dict):
         timer.setDaemon(True)
         timer.start()
         while not timer.getStatus() and ProcessPacket(curPacket, context):
-            # REVIEW
-            print("Process Wrapper loop")
+            pass
+            # REVIEW for debugging
+            # print("Process Wrapper loop")
     except KeyError:
         # If no 'timeLimit' provided...
         ProcessPacket(curPacket, context)
@@ -281,6 +282,7 @@ def launchClient(hostIP: str = "localhost", hostPort: int = 21567):
                     print("你死了")
                     ret = 2
                 elif curPacket.type == -8:
+                    print("村民胜利" if curPacket['result'] else "狼人胜利")
                     ret = 1 if curPacket['result'] == (
                         context['identity'] >= 0
                     ) else -1

@@ -1,9 +1,9 @@
 from .abstraction import *
-from typing import Tuple, Union, List, Optional
+from typing import Tuple, Union, List, Optional, Dict
 from itertools import groupby
 
 
-def getVotingResult(vote: List[int], policevote: Optional[int] = None) -> List[int]:
+def mergeVotingResult(vote: List[int], policevote: Optional[int] = None) -> Dict[int, float]:
     """
     Count the vote result and the return the candidates with most votes
 
@@ -22,13 +22,18 @@ def getVotingResult(vote: List[int], policevote: Optional[int] = None) -> List[i
             voteList[policevote] += 1.5
         else:
             voteList[policevote] = 1.5
+
+    return voteList
+
+
+def getVotingResult(merged: Dict[int, float]) -> List[int]:
     ret: List[int] = []
     maxV: float = 0
-    for i in voteList:
-        if voteList[i] > maxV:
-            maxV = voteList[i]
+    for i in merged:
+        if merged[i] > maxV:
+            maxV = merged[i]
             ret.clear()
-        if voteList[i] >= maxV:
+        if merged[i] >= maxV:
             ret.append(i)
 
     return ret

@@ -16,7 +16,7 @@ class Game:
 
     class Game implements the communication process and the whole game process. Provides interfaces for customizing a game.
 
-    ## Attributes
+    # Attributes
 
     - playerCount : `int`,                the number of the players
     - allPlayer   : `dict`,               the number and the identity of all player.
@@ -28,7 +28,7 @@ class Game:
     - identityList: `list`,               used when allocating the user identity
     - listener    : `IncomingConnection`, the thread for receiving handshakes
 
-    ## Methods
+    # Methods
 
     - `__init__()`: Initialize a new game class
     - `startListening()`: Starts listening for clients
@@ -45,13 +45,13 @@ class Game:
         """
         Initializa a new game
 
-        ### Parameter
+        # Parameter
 
         - ip: `str`, the IP address of the server
         - port: `int`, the port of the server, used for listening to the incoming connection
         - playerCount: `int`, the number of players in a game
 
-        ### Return
+        # Return
 
         A `Game` object
         """
@@ -100,11 +100,11 @@ class Game:
 
         The thread would automatically stop when there are enough players.
 
-        ### Parameter
+        # Parameter
 
         None
 
-        ### Return
+        # Return
 
         None
         """
@@ -154,11 +154,11 @@ class Game:
         """
         Check whether the game should be stopped
 
-        ### Parameter
+        # Parameter
 
         None
 
-        ### Return
+        # Return
 
         An `int` integer, value falls in `-1`, `0` and `1`
 
@@ -188,12 +188,12 @@ class Game:
         """
         Send a packet to all the players except the `srcPlayer` (if not `None`)
 
-        ### Parameters
+        # Parameters
 
         - srcPlayer: the player to skip
         - content: the content of the announcement
 
-        ### Return
+        # Return
 
         None
         """
@@ -212,7 +212,7 @@ class Game:
         """
         Initialize the identity configuration.
 
-        ### Parameter
+        # Parameter
 
         - Villager      : `int`, REQUIRED, the number of villagers
         - Wolf          : `int`, REQUIRED, the number of wolves
@@ -226,7 +226,7 @@ class Game:
 
         The value of `Villager` and `Wolf` parameter should be **at least** 1, and values of the other parameters should be **at most** 1.
 
-        ### Return
+        # Return
 
         None
         """
@@ -249,11 +249,11 @@ class Game:
         """
         The server add a player to game after receiving a choose seat request.
 
-        ### Parameter
+        # Parameter
 
         - data: data packet received.
 
-        ### Return
+        # Return
 
         None
         """
@@ -296,19 +296,22 @@ class Game:
           - If a wolf explodes in the election period, the server announces the victim and switch to night immediately. The vote is delayed to the next day. Explosion of another wolf at this time will make the police does not exist.
           - If there are two or more candidates get the same vote, they are required to talk in sequence again. If two or more candidates get the same vote once again, the police does not exist in the game.
 
-        ### Parameter
+        # Parameter
 
         None
 
-        ### Return
+        # Return
 
         The police elected. If a wolf explodes, returns None.
         """
 
         # Ask for election
         electionCandidate: List[Tuple[int, ReceiveThread]]
-        electionCandidate = [(player, self.activePlayer[player].joinElection())
-                             for player in sorted(self.activePlayer.keys())]
+        electionCandidate = [
+            (player, self.activePlayer[player].joinElection())
+            for player
+            in sorted(self.activePlayer.keys())
+        ]
         for player, recthread in electionCandidate:
             recthread.join()
         candidate: List[int] = []
@@ -321,7 +324,11 @@ class Game:
 
         if not candidate or len(candidate) == len(self.activePlayer):
             self.broadcast(None, "本局游戏没有警长")
-            return None
+            return
+        elif len(candidate) == 1:
+            self.broadcast(None, "警长是%d号玩家" % (candidate[0], ))
+            self.activePlayer[candidate[0]].police = True
+            return
 
         # Candidate talk in sequence
         for i in range(2):
@@ -330,13 +337,13 @@ class Game:
 
             Loop variable: i - only a counter
             """
-            self.broadcast(None,
-                           "警长竞选候选人：" +
-                           "号玩家、".join([str(_) for _ in candidate]) +
-                           "号玩家"
-                           )
+            self.broadcast(
+                None,
+                "警长竞选候选人：" + "号玩家、".join([str(_) for _ in candidate]) + "号玩家"
+            )
 
             for player in candidate:
+                sleep(0.05)
                 current = self.activePlayer[player].speak()
                 current.join()
                 if current.getResult() is not None:
@@ -367,15 +374,34 @@ class Game:
                     packetContent = thread.getResult().content
                 else:
                     continue
-                # REVIEW
-                print(packetContent)
-                if packetContent['vote'] and packetContent['candidate'] in sorted(self.activePlayer.keys()):
+                # REVIEW for debugging
+                # print(packetContent)
+                if packetContent['vote'] and packetContent['candidate'] in candidate:
                     vote.append(packetContent['candidate'])
-            result: List[int] = getVotingResult(vote)
+
+            voteResult: Dict[int, float] = mergeVotingResult(vote)
+            self.broadcast(
+                None,
+                "投票结果：%s" % (
+                    "、".join(
+                        [
+                            "%s号玩家%.1f票" % (player, vote)
+                            for player, vote
+                            in zip(
+                                voteResult.keys(),
+                                [voteResult[_] for _ in voteResult]
+                            )
+                        ]
+                    ),
+                )
+            )
+            result: List[int] = getVotingResult(voteResult)
+            sleep(0.05)
 
             del voteThread
             del vote
             del packetContent
+            del voteResult
 
             if (len(result) == 1):
                 self.broadcast(None, "警长是%d号玩家" % (result[0], ))
@@ -392,7 +418,7 @@ class Game:
                 candidate, result = result, candidate
                 result.clear()
         self.broadcast(None, "本局游戏没有警长")
-        return None
+        sleep(0.05)
 
     def victimSkill(self, isExplode: bool = False):
         """
@@ -402,7 +428,7 @@ class Game:
         - Anyone died during the day or the first night can have their last words.
         - If the guard or the king of werewolves dies and not dying from the poison, he can kill a person at this time.
 
-        ### Parameters
+        # Parameters
 
         - isExplode: `bool`, when the victim is killed by white werewolf's explode, no last words.
         """
@@ -466,7 +492,7 @@ class Game:
         - Announce the exile
           - If the exile is an idiot not voted out before, it can escape from death. But the idiot can no longer vote.
 
-        ### Return
+        # Return
 
         An `int` integer, value falls in `-1`, `0` and `1`
 
@@ -492,14 +518,14 @@ class Game:
         else:
             self.broadcast(None, "公布死讯：昨晚死亡的玩家是%s号玩家" %
                            "号玩家、".join(str(s) for s in self.victim))
-        status = self.checkStatus()
-        if status != 0:
-            return status
         # ask if the victim want to use the skill
         if len(self.victim) > 0:
             for id in self.victim:
                 self.activePlayer[id].informDeath()
             self.victimSkill()
+        status = self.checkStatus()
+        if status != 0:
+            return status
 
         # ask the police (if exists) to choose the talking sequence
         talkSequence: List[int] = []
@@ -541,6 +567,7 @@ class Game:
             """
             for id in talkSequence:
                 if id not in exile:
+                    sleep(0.05)
                     player = self.activePlayer[id]
                     current = player.speak()
                     current.join()
@@ -578,15 +605,32 @@ class Game:
                 packetContent = thread.getResult().content
                 if packetContent['vote'] and packetContent['candidate'] in sorted(self.activePlayer.keys()):
                     vote.append(packetContent['candidate'])
-            result: List[int] = getVotingResult(vote, policeVote)
+            voteResult: Dict[int, float] = mergeVotingResult(vote, policeVote)
+            self.broadcast(
+                None,
+                "投票结果：%s" % (
+                    "、".join(
+                        [
+                            "%s号玩家%.1f票" % (player, vote)
+                            for player, vote
+                            in zip(
+                                voteResult.keys(),
+                                [voteResult[_] for _ in voteResult]
+                            )
+                        ]
+                    ),
+                )
+            )
+            result: List[int] = getVotingResult(voteResult)
 
-            # REVIEW
-            print(vote)
-            print(result)
+            # REVIEW for debugging
+            # print(vote)
+            # print(result)
 
             del voteThread
             del vote
             del packetContent
+            del voteResult
 
             exile.clear()
             if (len(result) == 1):
@@ -734,7 +778,8 @@ class Game:
                 if packetContent['action'] and packetContent['target'] in sorted(self.activePlayer.keys()):
                     vote.append(packetContent['target'])
 
-            result: List[int] = getVotingResult(vote)
+            result: Any = mergeVotingResult(vote)
+            result = getVotingResult(result)
 
             # If there are more than 1 victim, randomly choose one
             shuffle(result)
@@ -842,7 +887,7 @@ class Game:
                     guardTarget = packetContent['target']
                     # Cannot save the same player in 2 days.
                     if (guardTarget != self.guardedLastNight):
-                        victimByWolf *= -1 if guardTarget + victimByWolf == 0 else 1
+                        victimByWolf *= -1 if guardTarget ** 2 == victimByWolf ** 2 else 1
                         # the situation when guard and save the same person
 
             del packetContent
@@ -879,7 +924,8 @@ class Game:
         Process the self-explosion
         """
         assert isinstance(self.activePlayer[id], Wolf)
-
+        if isinstance(self.activePlayer[id], KingOfWerewolves):
+            self.kingofwolfStatus = False
         sendingThreads: List[Thread] = []
         for i in self.activePlayer:
             """
@@ -904,11 +950,12 @@ class Game:
             if recvThread.getResult() is not None:
                 packetRecv = recvThread.getResult()
                 if packetRecv['action'] and packetRecv['target'] in self.activePlayer:
-                    """
-                    TODO: Process victim here
-                    """
+                    self.broadcast(
+                        None,
+                        "白狼王%d号玩家带走%d号玩家" % (id, packetRecv['target'])
+                    )
                     self.victim.clear()
-                    self.victim.append(self.activePlayer[packetRecv['target']])
+                    self.victim.append(packetRecv['target'])
                     self.victimSkill(True)
 
         self.explode = id  # 等待下一晚nightTime()函数执行完毕后死亡
@@ -920,7 +967,6 @@ class Game:
         assert self.running, "The game must be activated!"
         while not self.status:
             self.nightTime()
-            # TODO: Add parallel here
             if self.day == 0:
                 self.electPolice()
 
@@ -982,6 +1028,8 @@ class Game:
             None,
             "本局游戏村民获胜" if self.status == 1 else "本局游戏狼人获胜"
         )
+        for player in self.allPlayer:
+            self.allPlayer[player].socket.close()
 
 
 class IncomingConnection(KillableThread):
@@ -998,15 +1046,14 @@ class IncomingConnection(KillableThread):
         self.pending: bool = False
 
     def run(self):
-        # REVIEW
         while self.game.playerCount != len(self.game.activePlayer):
-            # REVIEW
-            print("Listening for additional player...")
+            # REVIEW for debugging
+            # print("Listening for additional player...")
             self.pending = True
             c, addr = self.socket.accept()
             self.pending = False
-            # REVIEW
-            print(c.getpeername())
-            print(c.getsockname())
-            print("Client connected")
+            # REVIEW for debugging
+            # print(c.getpeername())
+            # print(c.getsockname())
+            # print("Client connected")
             self.game.addPlayer(c, _recv(c))

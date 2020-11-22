@@ -66,9 +66,9 @@ class ChunckedData(object):
     def _decompress(data: bytearray) -> str:
         buffer: BytesIO = BytesIO(bytes(data))
         with gzip.GzipFile(mode='rb', fileobj=buffer) as output:
-            # REVIEW
             ret = output.read().decode(encoding="utf-8")
-            print(ret)
+            # REVIEW for debugging
+            # print(ret)
             return ret
 
     def __init__(self, packetType: int, **kwargs: Any):
@@ -118,8 +118,8 @@ class ChunckedData(object):
     def toBytesArray(self) -> bytearray:
         c = self.content.copy()
         c['type'] = self.type
-        # REVIEW
-        print(json.dumps(c))
+        # REVIEW for debugging
+        # print(json.dumps(c))
         return self._compress(json.dumps(c))
 
     def send(self, connection: socket.socket):
