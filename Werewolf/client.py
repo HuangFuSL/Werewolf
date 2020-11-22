@@ -3,6 +3,7 @@ import socket
 from socket import AF_INET, AF_INET6, SOCK_STREAM
 from threading import Thread
 from typing import Any, Dict, Optional, Tuple
+from time import sleep
 try:
     from .WP import ChunckedData, TimeLock, ReceiveThread, ReadInput
 except ImportError:
@@ -111,7 +112,7 @@ def ProcessPacket(toReply: ChunckedData, context: dict) -> bool:
             print(toReply['prompt'])
             ret: int = 0
             packetType: int
-            readThread = ReadInput("", str, toReply['timeLimit'])
+            readThread = ReadInput("", str, toReply['timeLimit'], True)
             readThread.setDaemon(True)
             readThread.start()
             readThread.join()
@@ -153,6 +154,7 @@ def ProcessPacket(toReply: ChunckedData, context: dict) -> bool:
             sendingThread = Thread(
                 target=packetSend.send, args=(context['socket'], )
             )
+            sendingThread.setDaemon(True)
             sendingThread.start()
 
             return packetType == 5
@@ -175,6 +177,7 @@ def ProcessPacket(toReply: ChunckedData, context: dict) -> bool:
             sendingThread = Thread(
                 target=packetSend.send, args=(context['socket'], )
             )
+            sendingThread.setDaemon(True)
             sendingThread.start()
 
     elif toReply.type == 4:
@@ -214,6 +217,7 @@ def ProcessPacket(toReply: ChunckedData, context: dict) -> bool:
         sendingThread = Thread(
             target=packetSend.send, args=(context['socket'], )
         )
+        sendingThread.setDaemon(True)
         sendingThread.start()
     elif toReply.type == 7:
         """
@@ -239,6 +243,7 @@ def ProcessPacket(toReply: ChunckedData, context: dict) -> bool:
         sendingThread = Thread(
             target=packetSend.send, args=(context['socket'], )
         )
+        sendingThread.setDaemon(True)
         sendingThread.start()
 
     return False
@@ -274,23 +279,28 @@ def launchClient(hostIP: str = "localhost", hostPort: int = 21567):
     sendingThread = Thread(target=packetSend.send, args=(sock,))
     receivingThread = ReceiveThread(sock, 120)
     receivingThread.setDaemon(True)
+    sendingThread.setDaemon(True)
     receivingThread.start()
     sendingThread.start()
     receivingThread.join()
-    curPacket = receivingThread.getResult()
+    curPacket: Optional[ChunckedData] = None
+    actionPacket: Optional[ChunckedData] = None
 
-    assert curPacket is not None, "Failed to connect to the server."
     ret: int = 0
     temp: Optional[KillableThread] = None
     while ret ** 2 != 1:
+        """
+        不巧，有时候按下Ctrl+C的时候程序恰好执行到这里，无法捕获到异常
+        """
         try:
-            # assert curPacket is not None, "Lost connection to the server."
             if isinstance(curPacket, ChunckedData):
                 if curPacket.type == 8:
                     print("你死了")
                     ret = 2
                 elif curPacket.type == -8:
-                    ret = 1 if curPacket['result'] and context['identity'] >= 0 else -1
+                    ret = 1 if curPacket['result'] == (
+                        context['identity'] >= 0
+                    ) else -1
                     break
                 else:
                     ret = 0
@@ -303,7 +313,7 @@ def launchClient(hostIP: str = "localhost", hostPort: int = 21567):
                     """
                     监听到有玩家发生自爆，杀掉当前线程
                     """
-                    print(curPacket['id'] + "号玩家自爆")
+                    print(str(curPacket['id']) + "号玩家自爆")
                     if temp is not None and temp.is_alive():
                         temp.kill()
                 else:
@@ -314,13 +324,19 @@ def launchClient(hostIP: str = "localhost", hostPort: int = 21567):
                         temp.kill()
                     temp = KillableThread(packetProcessWrapper,
                                           *(curPacket, context))
+                    temp.setDaemon(True)
                     temp.start()
 
-            receivingThread = ReceiveThread(sock, 1024)
-            receivingThread.setDaemon(True)
-            receivingThread.start()
-            receivingThread.join()
-            curPacket = receivingThread.getResult()
+                curPacket = None
+
+            if not receivingThread.is_alive():
+                curPacket = receivingThread.getResult()
+                receivingThread = ReceiveThread(sock, 1024)
+                receivingThread.setDaemon(True)
+                receivingThread.start()
+
+            sleep(0.05)
+
         except KeyboardInterrupt:
             if context['identity'] >= 0:
                 continue
@@ -354,6 +370,6 @@ def launchClient(hostIP: str = "localhost", hostPort: int = 21567):
             break
 
     if ret == 1:
-        print("You won!")
+        print("你赢了")
     elif ret == -1:
-        print("You lost!")
+        print("你输了")

@@ -476,7 +476,12 @@ class Game:
         """
         # ANCHOR: Implement the game logic in daytime
         self.day += 1
-        self.broadcast(None, "天亮了")
+        self.broadcast(
+            None,
+            "天亮了\n目前在场的玩家：%s号玩家" % (
+                "号玩家、".join([str(_) for _ in sorted(self.activePlayer.keys())])
+            )
+        )
 
         startpoint: int = 0
         exile: List[int] = []
@@ -670,7 +675,12 @@ class Game:
         """
 
         self.night += 1
-        self.broadcast(None, "天黑请闭眼")
+        self.broadcast(
+            None,
+            "天黑请闭眼\n目前在场的玩家：%s号玩家" % (
+                "号玩家、".join([str(_) for _ in sorted(self.activePlayer.keys())])
+            )
+        )
 
         # Parameters:
         victimByWolf: int = 0
@@ -692,6 +702,7 @@ class Game:
             )
 
         wolfThread: List[KillableThread] = []
+        sleep(0.5)
 
         for player in sorted(self.activePlayer.keys()):
             if isinstance(self.activePlayer[player], (Wolf, KingOfWerewolves, WhiteWerewolf)):
@@ -747,6 +758,7 @@ class Game:
                 predictorThread = self.activePlayer[player].skill()
             if predictorThread:
                 predictorThread.join()
+
         if predictor is not None and predictorThread is not None and predictorThread.getResult() is not None:
             packetContent: Dict[str, Any] = predictorThread.getResult().content
             if packetContent['action'] and packetContent['target'] in sorted(self.activePlayer.keys()):
@@ -760,10 +772,10 @@ class Game:
                 self.activePlayer[predictorTarget]) >= 0
             packetContent['target'] = -1024
             sendingThread: Thread = Thread(
-                target=ChunckedData(-3, **
-                                    packetContent).send, args=(predictor.socket, )
+                target=ChunckedData(-3, **packetContent).send,
+                args=(predictor.socket, ),
+                daemon=True
             )
-            sendingThread.setDaemon(True)
             sendingThread.start()
             del packetContent
         del predictorThread
@@ -863,17 +875,20 @@ class Game:
         """
         assert isinstance(self.activePlayer[id], Wolf)
 
+        sendingThreads: List[Thread] = []
         for i in self.activePlayer:
             """
             Inform all players, including the player sends the message
             """
-            packetContent = self.activePlayer[i].getBasePacket()
-            packetContent[id] = id
-            sendingThread: Thread = Thread(
-                target=ChunckedData(9, **
-                                    packetContent).send, args=(self.activePlayer[i].socket, )
-            )
-            sendingThread.start()
+            packetContent = self.activePlayer[i]._getBasePacket()
+            packetContent["id"] = id
+            sendingThreads.append(Thread(
+                target=ChunckedData(9, **packetContent).send,
+                args=(self.activePlayer[i].socket, ),
+                daemon=True
+            ))
+        for thread in sendingThreads:
+            thread.start()
 
         if isinstance(self.activePlayer[id], WhiteWerewolf):
             """
@@ -923,7 +938,7 @@ class Game:
             explodeThreadv4.setDaemon(True)
             explodeThreadv6.setDaemon(True)
             explodeThreadv4.start()
-            explodeListenerv6.start()
+            explodeThreadv6.start()
             dayTimeThread.start()
 
             while dayTimeThread.is_alive():
@@ -952,6 +967,7 @@ class Game:
                 self.explode = curPacket['id']
                 dayTimeThread.kill()
                 self.broken(curPacket['id'])
+                break
 
             if explodeThreadv4.is_alive():
                 explodeThreadv4.kill()

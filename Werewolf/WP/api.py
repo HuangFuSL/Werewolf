@@ -215,14 +215,16 @@ class KillableThread(threading.Thread):
             raise self.exception
 
 
-def getInput(prompt: str, inputType: type = str) -> Any:
-    flag: bool = True
+def getInput(prompt: str, inputType: type = str, allowInterrupt: bool = False) -> Any:
     temp: str
-    while flag:
+    while True:
         try:
             temp = input(prompt)
         except EOFError:
-            return KeyboardInterrupt()
+            if allowInterrupt:
+                return KeyboardInterrupt()
+            else:
+                continue
         if inputType != str:
             try:
                 return eval(temp)
@@ -237,18 +239,20 @@ class ReadInput(KillableThread):
     The input thread, will be interrupted by KeyBoardInterruption
     """
 
-    def __init__(self, prompt: str, inputType: type = str, timeout: float = 0):
+    def __init__(self, prompt: str, inputType: type = str, timeout: float = 0, allowInterrupt: bool = False):
         super().__init__(getInput)
         self.inputType = inputType
         self.timeout = timeout
         self.result: Any = None
         self.prompt = prompt
+        self.allowInterrupt: bool = allowInterrupt
 
     def run(self) -> Any:
         if self.timeout == 0:
             self.result = getInput(self.prompt, self.inputType)
         else:
-            dest: ReadInput = ReadInput(self.prompt, self.inputType)
+            dest: ReadInput = ReadInput(
+                self.prompt, self.inputType, 0, self.allowInterrupt)
             dest.setDaemon(True)
             dest.start()
             dest.join(self.timeout)
