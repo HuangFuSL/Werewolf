@@ -305,6 +305,8 @@ class Game:
         The police elected. If a wolf explodes, returns None.
         """
 
+        sleep(0.05)
+
         # Ask for election
         electionCandidate: List[Tuple[int, ReceiveThread]]
         electionCandidate = [
@@ -501,6 +503,7 @@ class Game:
         - `1`: The game stops and the villagers win - the wolves are eliminated
         """
         # ANCHOR: Implement the game logic in daytime
+        sleep(0.05)
         self.day += 1
         self.broadcast(
             None,
@@ -657,7 +660,7 @@ class Game:
 
         # announce the exile and check the game status
         if len(exile) == 0:
-            self.broadcast(None, "No one exile!")
+            self.broadcast(None, "没有人被放逐")
         else:
             del self.activePlayer[exile[0]]
             self.victim.clear()
@@ -665,8 +668,6 @@ class Game:
             for id in self.victim:
                 if id in sorted(self.activePlayer.keys()):
                     self.activePlayer.pop(id)
-            self.broadcast(None, "被放逐的玩家是%s号玩家" %
-                           "号玩家、".join(str(s) for s in self.victim))
         status = self.checkStatus()
         if status:
             return status
@@ -717,7 +718,7 @@ class Game:
           - The guard cannot guard a player in two consecutive nights.
         - The hunter wakes up. The server inform the skill status. (If not killed by the witch)
         """
-
+        sleep(0.05)
         self.night += 1
         self.broadcast(
             None,
