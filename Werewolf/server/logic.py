@@ -393,13 +393,14 @@ class Game:
         - If the guard or the king of werewolves dies and not dying from the poison, he can kill a person at this time.
         """
         for id in self.victim:
-            victim = self.activePlayer[id]
+            victim = self.allPlayer[id]
+            print(victim)
             retMsg = victim.onDead(True if self.night == 1 or self.day ==
                                    self.night else False, default_timeout())
             if retMsg[0] and retMsg[0].getResult() and \
                     retMsg[0].content['vote'] and \
                     retMsg[0].content['candidate'] in sorted(self.activePlayer.keys()):
-                self.activePlayer[retMsg[0].content['candidate']] = True
+                self.activePlayer[retMsg[0].content['candidate']].police = True
             if retMsg[1]:
                 self.broadcast(None, retMsg[1].content['content'])
             if isinstance(victim, Hunter) or isinstance(victim, KingOfWerewolves):
@@ -415,12 +416,16 @@ class Game:
                     if packetContent['action'] and packetContent['target'] in sorted(self.activePlayer.keys()):
                         self.broadcast(None, "玩家%d被玩家%d杀死"
                                        % (packetContent['target'], id))
+                        self.activePlayer[
+                            packetContent['target']
+                        ].informDeath()
                         self.activePlayer.pop(packetContent['target'])
                         status = self.checkStatus()
                         if status != 0:
                             return status
-                        victim.informDeath()
-                        victim.onDead(True, default_timeout(None))
+                        self.allPlayer[
+                            packetContent['target']
+                        ].onDead(True, default_timeout(None))
                     else:
                         victim.inform("你的选择无效")
                 else:
@@ -844,11 +849,10 @@ class Game:
             if self.day == 0:
                 self.electPolice()
             self.dayTime()
-        # TODO: Add game result reply
         self.announceResult(self.status == 1)
         self.broadcast(
             None,
-            "The villagers won" if self.status == 1 else "The wolves won"
+            "本局游戏村民获胜" if self.status == 1 else "本局游戏狼人获胜"
         )
 
 

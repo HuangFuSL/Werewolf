@@ -1,8 +1,8 @@
 import socket
 from threading import Thread
-from typing import Optional, List, Tuple
+from typing import Optional, List
 
-from ..WP.api import ChunckedData, ReceiveThread, TimeLock, _recv
+from ..WP.api import ChunckedData, ReceiveThread, TimeLock
 
 defaultTimeout: float = 120.0  # 超时时间，是各方法的默认参数
 
@@ -312,6 +312,7 @@ class Person():
             sendingThread.setDaemon(True)
             sendingThread.start()
             ret.append(self._startListening(timeout=timeouts))
+            ret[0].join()
         else:
             ret.append(None)
         if withFinalWords:
@@ -417,10 +418,10 @@ class Wolf(Person):
             elif recv.getResult().type == 5:
                 packet: dict = recv.getResult().content.copy()
                 recv = self._startListening(timeout)
+                packet['content'] = "%d号玩家发言：\t" % (
+                    self.id, ) + packet['content']
                 for peer in self.peerList:
                     packet.update(**peer._getBasePacket())
-                    packet['content'] = "%d号玩家发言：\t" % (
-                        self.id, ) + packet['content']
                     packetSend = ChunckedData(5, **packet)
                     thread = Thread(target=packetSend.send,
                                     args=(peer.socket, ))

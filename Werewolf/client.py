@@ -1,15 +1,8 @@
-# -*- coding: utf-8 -*-
-"""
-Created on Sat Nov  7 15:06:28 2020
-@author: lenovo-pc
-"""
-
 from Werewolf.WP.api import KillableThread
 import socket
 from socket import AF_INET, AF_INET6, SOCK_STREAM
-import sys
-from threading import Thread, ThreadError
-from typing import Any, Dict, Optional, Tuple, Union
+from threading import Thread
+from typing import Any, Dict, Optional, Tuple
 try:
     from .WP import ChunckedData, TimeLock, ReceiveThread, ReadInput
 except ImportError:
@@ -243,7 +236,7 @@ def ProcessPacket(toReply: ChunckedData, context: dict) -> bool:
         )
         sendingThread.start()
 
-        return False
+    return False
 
 
 def packetProcessWrapper(curPacket: ChunckedData, context: dict):
