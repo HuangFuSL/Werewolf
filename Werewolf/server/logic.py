@@ -488,9 +488,9 @@ class Game:
 
         # announce the victim and check the game status
         if len(self.victim) == 0:
-            self.broadcast(None, "昨晚是平安夜")
+            self.broadcast(None, "公布死讯：昨晚是平安夜")
         else:
-            self.broadcast(None, "昨晚死亡的玩家是%s号玩家" %
+            self.broadcast(None, "公布死讯：昨晚死亡的玩家是%s号玩家" %
                            "号玩家、".join(str(s) for s in self.victim))
         status = self.checkStatus()
         if status != 0:
@@ -743,8 +743,13 @@ class Game:
             del vote
             del packetContent
             del result
+            del temp
         del wolfThread
-        del temp
+
+        if self.explode is not None:
+            self.activePlayer[self.explode].informDeath()
+            self.activePlayer.pop(self.explode)
+            self.explode = None
 
         # ANCHOR: Predictor wake up
         # The predictor ask for a player's identity
@@ -915,12 +920,6 @@ class Game:
         assert self.running, "The game must be activated!"
         while not self.status:
             self.nightTime()
-            if self.explode is not None:
-                """
-                Remove the exploded werewolf in the night
-                """
-                self.activePlayer.pop(self.explode)
-                self.explode = None
             # TODO: Add parallel here
             if self.day == 0:
                 self.electPolice()
@@ -967,12 +966,16 @@ class Game:
                 self.explode = curPacket['id']
                 dayTimeThread.kill()
                 self.broken(curPacket['id'])
+                c.close()
                 break
 
             if explodeThreadv4.is_alive():
                 explodeThreadv4.kill()
             if explodeThreadv6.is_alive():
                 explodeThreadv6.kill()
+
+            explodeListenerv4.close()
+            explodeListenerv6.close()
 
         self.announceResult(self.status == 1)
         self.broadcast(

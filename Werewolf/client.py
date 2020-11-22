@@ -151,11 +151,7 @@ def ProcessPacket(toReply: ChunckedData, context: dict) -> bool:
                 packetType = -3
 
             packetSend = ChunckedData(packetType, **basePacket)
-            sendingThread = Thread(
-                target=packetSend.send, args=(context['socket'], )
-            )
-            sendingThread.setDaemon(True)
-            sendingThread.start()
+            packetSend.send(context['socket'])
 
             return packetType == 5
 
@@ -174,11 +170,7 @@ def ProcessPacket(toReply: ChunckedData, context: dict) -> bool:
             packetType = -3
 
             packetSend = ChunckedData(packetType, **basePacket)
-            sendingThread = Thread(
-                target=packetSend.send, args=(context['socket'], )
-            )
-            sendingThread.setDaemon(True)
-            sendingThread.start()
+            packetSend.send(context['socket'])
 
     elif toReply.type == 4:
         """
@@ -214,11 +206,8 @@ def ProcessPacket(toReply: ChunckedData, context: dict) -> bool:
         packetType = -6
 
         packetSend = ChunckedData(packetType, **basePacket)
-        sendingThread = Thread(
-            target=packetSend.send, args=(context['socket'], )
-        )
-        sendingThread.setDaemon(True)
-        sendingThread.start()
+        packetSend.send(context['socket'])
+
     elif toReply.type == 7:
         """
         7: {
@@ -240,11 +229,7 @@ def ProcessPacket(toReply: ChunckedData, context: dict) -> bool:
         packetType = -7
 
         packetSend = ChunckedData(packetType, **basePacket)
-        sendingThread = Thread(
-            target=packetSend.send, args=(context['socket'], )
-        )
-        sendingThread.setDaemon(True)
-        sendingThread.start()
+        packetSend.send(context['socket'])
 
     return False
 
@@ -276,12 +261,10 @@ def launchClient(hostIP: str = "localhost", hostPort: int = 21567):
 
     basePacket: dict = getBasePacket(context)
     packetSend = ChunckedData(1, **basePacket)
-    sendingThread = Thread(target=packetSend.send, args=(sock,))
     receivingThread = ReceiveThread(sock, 120)
     receivingThread.setDaemon(True)
-    sendingThread.setDaemon(True)
     receivingThread.start()
-    sendingThread.start()
+    packetSend.send(context['socket'])
     receivingThread.join()
     curPacket: Optional[ChunckedData] = None
     actionPacket: Optional[ChunckedData] = None
@@ -350,14 +333,7 @@ def launchClient(hostIP: str = "localhost", hostPort: int = 21567):
                 try:
                     sockTemp = socket.socket(sockType, SOCK_STREAM)
                     sockTemp.connect((hostIP, hostPort + 1))
-
-                    sendingThread = Thread(
-                        target=packetSend.send, args=(sockTemp, )
-                    )
-                    sendingThread.setDaemon(True)
-                    sendingThread.start()
-                    sendingThread.join()
-
+                    packetSend.send(sockTemp)
                     del sockTemp
                 except ConnectionRefusedError:
                     """
