@@ -119,6 +119,11 @@ def ProcessPacket(toReply: ChunckedData, context: dict) -> bool:
             basePacket = getBasePacket(context)
 
             try:
+                if isinstance(readThread.getResult(), KeyboardInterrupt):
+                    if context['identity'] >= 0:
+                        return True
+                    else:
+                        raise readThread.getResult()
                 ret = int(readThread.getResult())
             except ValueError:
                 """
@@ -245,8 +250,10 @@ def packetProcessWrapper(curPacket: ChunckedData, context: dict):
         timer.setDaemon(True)
         timer.start()
         while not timer.getStatus() and ProcessPacket(curPacket, context):
+            # REVIEW
             print("Process Wrapper loop")
-    except:
+    except KeyError:
+        # If no 'timeLimit' provided...
         ProcessPacket(curPacket, context)
 
 
@@ -254,18 +261,13 @@ def launchClient(hostIP: str = "localhost", hostPort: int = 21567):
     context: Dict[str, Any] = {'isalive': True}
     context['serverAddr'] = hostIP
     context['serverPort'] = hostPort
-    if ":" in hostIP:
-        sock = socket.socket(AF_INET6, SOCK_STREAM)
-        sock.connect(getServerAddr(context=context))
-        context['socket'] = sock
-        context['serverAddr'], context['serverPort'] = sock.getpeername()[:2]
-        context['clientAddr'], context['clientPort'] = sock.getsockname()[:2]
-    else:
-        sock = socket.socket(AF_INET, SOCK_STREAM)
-        sock.connect(getServerAddr(context=context))
-        context['socket'] = sock
-        context['serverAddr'], context['serverPort'] = sock.getpeername()
-        context['clientAddr'], context['clientPort'] = sock.getsockname()
+
+    sockType = AF_INET6 if ":" in hostIP else AF_INET
+    sock = socket.socket(sockType, SOCK_STREAM)
+    sock.connect(getServerAddr(context=context))
+    context['socket'] = sock
+    context['serverAddr'], context['serverPort'] = sock.getpeername()[:2]
+    context['clientAddr'], context['clientPort'] = sock.getsockname()[:2]
 
     basePacket: dict = getBasePacket(context)
     packetSend = ChunckedData(1, **basePacket)
@@ -282,29 +284,38 @@ def launchClient(hostIP: str = "localhost", hostPort: int = 21567):
     temp: Optional[KillableThread] = None
     while ret ** 2 != 1:
         try:
-            assert curPacket is not None, "Lost connection to the server."
-            if curPacket.type == 8:
-                print("你死了")
-                ret = 2
-            elif curPacket.type == -8:
-                ret = 1 if curPacket['result'] and context['identity'] >= 0 else -1
-                break
-            else:
-                ret = 0
-            if curPacket.type in [4, 5]:
-                """
-                Only print the message, does not change the loop status
-                """
-                packetProcessWrapper(curPacket, context)
-            else:
-                """
-                Enter the wrapper loop
-                """
-                if temp is not None and temp.is_alive():
-                    temp.kill()
-                temp = KillableThread(packetProcessWrapper,
-                                      *(curPacket, context))
-                temp.start()
+            # assert curPacket is not None, "Lost connection to the server."
+            if isinstance(curPacket, ChunckedData):
+                if curPacket.type == 8:
+                    print("你死了")
+                    ret = 2
+                elif curPacket.type == -8:
+                    ret = 1 if curPacket['result'] and context['identity'] >= 0 else -1
+                    break
+                else:
+                    ret = 0
+                if curPacket.type in [4, 5]:
+                    """
+                    Only print the message, does not change the loop status
+                    """
+                    packetProcessWrapper(curPacket, context)
+                elif curPacket.type == 9:
+                    """
+                    监听到有玩家发生自爆，杀掉当前线程
+                    """
+                    print(curPacket['id'] + "号玩家自爆")
+                    if temp is not None and temp.is_alive():
+                        temp.kill()
+                else:
+                    """
+                    Enter the wrapper loop. First check the running status of the wrapper.
+                    """
+                    if temp is not None and temp.is_alive():
+                        temp.kill()
+                    temp = KillableThread(packetProcessWrapper,
+                                          *(curPacket, context))
+                    temp.start()
+
             receivingThread = ReceiveThread(sock, 1024)
             receivingThread.setDaemon(True)
             receivingThread.start()
@@ -320,12 +331,27 @@ def launchClient(hostIP: str = "localhost", hostPort: int = 21567):
                 basePacket: dict = getBasePacket(context)
                 basePacket['id'] = context['id']
                 packetSend = ChunckedData(9, **basePacket)
-                sock = socket.socket(AF_INET, SOCK_STREAM)
-                sendingThread = Thread(
-                    target=packetSend.send, args=(sock, )
-                )
-                sendingThread.setDaemon(True)
-                sendingThread.start()
+                try:
+                    sockTemp = socket.socket(sockType, SOCK_STREAM)
+                    sockTemp.connect((hostIP, hostPort + 1))
+
+                    sendingThread = Thread(
+                        target=packetSend.send, args=(sockTemp, )
+                    )
+                    sendingThread.setDaemon(True)
+                    sendingThread.start()
+                    sendingThread.join()
+
+                    del sockTemp
+                except ConnectionRefusedError:
+                    """
+                    The server is not ready for receiving messages
+                    """
+                    print("你现在不能自爆")
+
+        except ConnectionResetError:
+            print("与服务器断开连接")
+            break
 
     if ret == 1:
         print("You won!")

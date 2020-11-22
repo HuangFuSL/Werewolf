@@ -4,7 +4,7 @@ from typing import Optional, List
 
 from ..WP.api import ChunckedData, ReceiveThread, TimeLock
 
-defaultTimeout: float = 120.0  # 超时时间，是各方法的默认参数
+defaultTimeout: float = 180.0  # 超时时间，是各方法的默认参数
 
 
 def default_timeout(timeout=None) -> float:
@@ -312,7 +312,7 @@ class Person():
             sendingThread.setDaemon(True)
             sendingThread.start()
             ret.append(self._startListening(timeout=timeouts))
-            ret[0].join()
+            ret[-1].join()
         else:
             ret.append(None)
         if withFinalWords:
@@ -324,6 +324,7 @@ class Person():
             sendingThread.setDaemon(True)
             sendingThread.start()
             ret.append(self._startListening(timeout=timeouts))
+            ret[-1].join()
         else:
             ret.append(None)
         return tuple(ret)

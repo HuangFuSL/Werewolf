@@ -1,4 +1,6 @@
 from random import randint, shuffle
+import socket
+from socket import AF_INET, SOCK_STREAM, AF_INET6
 from threading import Thread
 from typing import Any, Dict, Tuple
 from time import sleep
@@ -58,14 +60,17 @@ class Game:
         self.playerCount: int = playerCount
         self.allPlayer: Dict[int, Any] = {}
         self.activePlayer: Dict[int, Any] = {}
-
-        self.socketv4 = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        # Network parameters
+        self.port = port
+        self.ipv4 = ipv4
+        self.ipv6 = ipv6
+        self.socketv4 = socket.socket(AF_INET, socket.SOCK_STREAM)
         self.socketv4.bind((ipv4, port))
         self.socketv4.listen(10)
-        self.socketv6 = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
+        self.socketv6 = socket.socket(AF_INET6, socket.SOCK_STREAM)
         self.socketv6.bind((ipv6, port))
         self.socketv6.listen(10)
-
+        # Game initialization parameters
         self.running: bool = False
         self.identityList: List[Any] = []
         self.listener4: IncomingConnection = IncomingConnection(
@@ -73,8 +78,9 @@ class Game:
         self.listener6: IncomingConnection = IncomingConnection(
             self.socketv6, self)
         # Further initialization
-        self.listener4.setName("IPV4 incoming connection receiver")
-        self.listener6.setName("IPV6 incoming connection receiver")
+        if True:  # Used for indention
+            self.listener4.setName("IPV4 incoming connection receiver")
+            self.listener6.setName("IPV6 incoming connection receiver")
 
         # Game parameters
         self.day: int = 0
@@ -85,6 +91,7 @@ class Game:
         self.guardedLastNight: int = 0
         self.hunterStatus: bool = True
         self.kingofwolfStatus: bool = True
+        self.explode: Optional[int] = None
         # Verbose
 
     def startListening(self):
@@ -106,6 +113,8 @@ class Game:
         ), "The identity list must be initialized"  # The identity list should not be empty
         assert self.listener4.is_alive() == False, "There is already an active listener"
         assert self.listener6.is_alive() == False, "There is already an active listener"
+        self.listener4.setDaemon(True)
+        self.listener6.setDaemon(True)
         self.listener4.start()
         self.listener6.start()
         while self.identityList:
@@ -273,6 +282,7 @@ class Game:
             target=ChunckedData(-1, **
                                 packet).send, args=(self.activePlayer[id].socket,)
         )
+        sendingThread.setDaemon(True)
         sendingThread.start()
 
     def electPolice(self):
@@ -309,7 +319,7 @@ class Game:
                 candidate.append(player)
         current: ReceiveThread
 
-        if not candidate:
+        if not candidate or len(candidate) == len(self.activePlayer):
             self.broadcast(None, "本局游戏没有警长")
             return None
 
@@ -384,19 +394,25 @@ class Game:
         self.broadcast(None, "本局游戏没有警长")
         return None
 
-    def victimSkill(self):
+    def victimSkill(self, isExplode: bool = False):
         """
         After a player has died, the victim should take the following actions in sequence:
 
         - If police dies, he should decide the next police.
         - Anyone died during the day or the first night can have their last words.
         - If the guard or the king of werewolves dies and not dying from the poison, he can kill a person at this time.
+
+        ### Parameters
+
+        - isExplode: `bool`, when the victim is killed by white werewolf's explode, no last words.
         """
         for id in self.victim:
             victim = self.allPlayer[id]
             print(victim)
-            retMsg = victim.onDead(True if self.night == 1 or self.day ==
-                                   self.night else False, default_timeout())
+            retMsg = victim.onDead(
+                (self.night == 1 or self.day == self.night) and not isExplode,
+                default_timeout()
+            )
             if retMsg[0] and retMsg[0].getResult() and \
                     retMsg[0].content['vote'] and \
                     retMsg[0].content['candidate'] in sorted(self.activePlayer.keys()):
@@ -567,6 +583,7 @@ class Game:
             del vote
             del packetContent
 
+            exile.clear()
             if (len(result) == 1):
                 """
                 Check the identity of the exiled. Idiot can escape from dying.
@@ -579,7 +596,6 @@ class Game:
                 else:
                     self.activePlayer[result[0]].used = 1
                     self.broadcast(None, "%d号玩家是白痴" % (result[0],))
-                    exile.pop()
                 break
             elif i == 0:
                 self.broadcast(
@@ -588,7 +604,6 @@ class Game:
                         [str(_) for _ in result]
                     )
                 )
-                exile.clear()
                 exile, result = result, exile
 
         # announce the exile and check the game status
@@ -609,7 +624,7 @@ class Game:
         # ask if the victim want to use the skill
         while self.victim:  # 极端情况可能会开两次枪
             for id in self.victim:
-                self.activePlayer[id].informDeath()
+                self.allPlayer[id].informDeath()
             self.victimSkill()
         status = self.checkStatus()
         return status
@@ -653,7 +668,6 @@ class Game:
           - The guard cannot guard a player in two consecutive nights.
         - The hunter wakes up. The server inform the skill status. (If not killed by the witch)
         """
-        # SECTION: Implement the game logic at night
 
         self.night += 1
         self.broadcast(None, "天黑请闭眼")
@@ -684,6 +698,7 @@ class Game:
                 ret: Optional[KillableThread] = KillableThread(
                     self.activePlayer[player].kill, **{}
                 )
+                ret.setDaemon(True)
                 ret.start()
                 if ret is not None:
                     wolfThread.append(ret)
@@ -748,6 +763,7 @@ class Game:
                 target=ChunckedData(-3, **
                                     packetContent).send, args=(predictor.socket, )
             )
+            sendingThread.setDaemon(True)
             sendingThread.start()
             del packetContent
         del predictorThread
@@ -841,14 +857,107 @@ class Game:
 
         self.night += 1
 
+    def broken(self, id: int):
+        """
+        Process the self-explosion
+        """
+        assert isinstance(self.activePlayer[id], Wolf)
+
+        for i in self.activePlayer:
+            """
+            Inform all players, including the player sends the message
+            """
+            packetContent = self.activePlayer[i].getBasePacket()
+            packetContent[id] = id
+            sendingThread: Thread = Thread(
+                target=ChunckedData(9, **
+                                    packetContent).send, args=(self.activePlayer[i].socket, )
+            )
+            sendingThread.start()
+
+        if isinstance(self.activePlayer[id], WhiteWerewolf):
+            """
+            Kill someone
+            """
+            recvThread: ReceiveThread = self.activePlayer[id].skill()
+            recvThread.join()
+            if recvThread.getResult() is not None:
+                packetRecv = recvThread.getResult()
+                if packetRecv['action'] and packetRecv['target'] in self.activePlayer:
+                    """
+                    TODO: Process victim here
+                    """
+                    self.victim.clear()
+                    self.victim.append(self.activePlayer[packetRecv['target']])
+                    self.victimSkill(True)
+
+        self.explode = id  # 等待下一晚nightTime()函数执行完毕后死亡
+
     def launch(self):
+        """
+        Launch the game
+        """
         assert self.running, "The game must be activated!"
         while not self.status:
             self.nightTime()
+            if self.explode is not None:
+                """
+                Remove the exploded werewolf in the night
+                """
+                self.activePlayer.pop(self.explode)
+                self.explode = None
             # TODO: Add parallel here
             if self.day == 0:
                 self.electPolice()
-            self.dayTime()
+
+            explodeListenerv4 = socket.socket(AF_INET, SOCK_STREAM)
+            explodeListenerv6 = socket.socket(AF_INET6, SOCK_STREAM)
+            explodeListenerv4.bind((self.ipv4, self.port + 1))
+            explodeListenerv6.bind((self.ipv6, self.port + 1))
+            explodeListenerv4.listen(5)
+            explodeListenerv6.listen(5)
+            dayTimeThread = KillableThread(self.dayTime)
+            explodeThreadv4 = KillableThread(explodeListenerv4.accept)
+            explodeThreadv6 = KillableThread(explodeListenerv6.accept)
+            dayTimeThread.setDaemon(True)
+            explodeThreadv4.setDaemon(True)
+            explodeThreadv6.setDaemon(True)
+            explodeThreadv4.start()
+            explodeListenerv6.start()
+            dayTimeThread.start()
+
+            while dayTimeThread.is_alive():
+                """
+                Listen for message
+                """
+                if explodeThreadv4.is_alive() and explodeThreadv6.is_alive():
+                    continue
+                c: socket.socket
+                addr: Tuple[Any]
+                if explodeThreadv4.is_alive() == False and explodeThreadv4.getResult():
+                    c, addr = explodeThreadv4.getResult()
+                    explodeThreadv6.kill()
+                else:
+                    c, addr = explodeThreadv6.getResult()
+                    explodeThreadv4.kill()
+
+                listenThread: ReceiveThread = ReceiveThread(c, 60)
+                listenThread.setDaemon(True)
+                listenThread.start()
+                listenThread.join()
+                curPacket = listenThread.getResult()
+                if curPacket is None:
+                    continue
+                assert curPacket.type == 9
+                self.explode = curPacket['id']
+                dayTimeThread.kill()
+                self.broken(curPacket['id'])
+
+            if explodeThreadv4.is_alive():
+                explodeThreadv4.kill()
+            if explodeThreadv6.is_alive():
+                explodeThreadv6.kill()
+
         self.announceResult(self.status == 1)
         self.broadcast(
             None,

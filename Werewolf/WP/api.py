@@ -127,6 +127,9 @@ class ChunckedData(object):
 
 
 def _recv(connection: socket.socket) -> ChunckedData:
+    """
+    Wrapper for receiving thread.
+    """
     ret = ChunckedData(0, rawData=connection.recv(16384))
     return ret
 
@@ -173,12 +176,16 @@ class KillableThread(threading.Thread):
         self.funcArg: dict = kwargs
         self.funcTup: Tuple = args
         self.result: Any = None
+        self.exception: Any = None
 
     def run(self):
         """
         Executes the function here
         """
-        self.result = self.func(*self.funcTup, **self.funcArg)
+        try:
+            self.result = self.func(*self.funcTup, **self.funcArg)
+        except BaseException as e:
+            self.exception = e
 
     def get_id(self):
         """
@@ -202,7 +209,10 @@ class KillableThread(threading.Thread):
             print('Exception raise failure')
 
     def getResult(self):
-        return self.result
+        if self.exception is None:
+            return self.result
+        else:
+            raise self.exception
 
 
 def getInput(prompt: str, inputType: type = str) -> Any:
@@ -217,7 +227,7 @@ def getInput(prompt: str, inputType: type = str) -> Any:
             try:
                 return eval(temp)
             except:
-                print("Input type mismatch!")
+                print("你的输入格式不匹配")
         else:
             return temp
 
@@ -264,21 +274,28 @@ class ReceiveThread(KillableThread):
         self.result: Any = None
         self.timeout: float = timeout
         self.connection: socket.socket = connection
-        self.exception: ReceiveTimeoutError = ReceiveTimeoutError(self.timeout)
+        self.exception: Any = None
 
     def run(self):
-        if not self.timeout:
-            self.result = _recv(self.connection)
-        else:
-            dest: ReceiveThread = ReceiveThread(self.connection)
-            dest.setDaemon(True)
-            dest.start()
-            dest.join(self.timeout)
-            self.result = dest.getResult()
-            if self.result is None:
-                self.exitcode = 1
-                self.exception = ReceiveTimeoutError(self.timeout)
-                self.exc_traceback = str(self.exception)
+        try:
+            if not self.timeout:
+                self.result = _recv(self.connection)
+            else:
+                dest: ReceiveThread = ReceiveThread(self.connection)
+                dest.setDaemon(True)
+                dest.start()
+                dest.join(self.timeout)
+                self.result = dest.getResult()
+                if self.result is None:
+                    self.exitcode = 1
+                    self.exception = ReceiveTimeoutError(self.timeout)
+                    self.exc_traceback = str(self.exception)
+        except BaseException as e:
+            self.exception = e
+            self.result = None
 
     def getResult(self) -> Optional[ChunckedData]:
-        return self.result
+        if self.exception is None:
+            return self.result
+        else:
+            raise self.exception
